@@ -1,0 +1,17 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.dock {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 50%;
+  width: 100%;
+  max-width: 47.5rem;
+  padding: 0 1rem;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
