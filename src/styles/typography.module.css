@@ -1,0 +1,5 @@
+.input {
+    font-size: var(--text-base);
+    font-weight: var(--font-normal);
+    line-height: var(--leading-normal);
+}
