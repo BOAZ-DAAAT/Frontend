@@ -6,12 +6,16 @@ export default {
     extend: {
       colors: {
         brand: {
-          50: '#eef6ff',
-          100: '#d9ebff',
-          500: '#3478f6',
-          600: '#2463db',
-          700: '#1d4fb7',
+          primary: '#343434',
         },
+
+        background: {
+          main: '#E7E7E7',
+          dot: '#FFFFFF'
+        },
+
+        surface: '#FFFFFF',
+
       },
     },
   },
