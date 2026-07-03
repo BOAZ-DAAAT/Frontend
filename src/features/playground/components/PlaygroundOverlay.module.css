@@ -5,6 +5,14 @@
   pointer-events: none;
 }
 
+.toolbarDock {
+  position: absolute;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
 .sidebarDock {
   position: absolute;
   top: 8rem;
