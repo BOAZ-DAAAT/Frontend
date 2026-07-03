@@ -1,14 +1,8 @@
-import {
-  Background,
-  Controls,
-  ReactFlow,
-  useEdgesState,
-  useNodesState,
-} from '@xyflow/react';
+import { Background, ReactFlow, useEdgesState, useNodesState } from '@xyflow/react';
 
 import '@xyflow/react/dist/style.css';
 
-import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
+import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
 import styles from './PlaygroundCanvas.module.css';
@@ -16,6 +10,7 @@ import styles from './PlaygroundCanvas.module.css';
 export function PlaygroundCanvas() {
   const [nodes, , onNodesChange] = useNodesState([]);
   const [edges, , onEdgesChange] = useEdgesState([]);
+  const { collapse } = useSidebar();
 
   return (
     <div className={styles.canvas}>
@@ -24,6 +19,7 @@ export function PlaygroundCanvas() {
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onPaneClick={collapse}
         fitView
       >
         <Background color="var(--color-background-dot)" gap={24} size={2} />

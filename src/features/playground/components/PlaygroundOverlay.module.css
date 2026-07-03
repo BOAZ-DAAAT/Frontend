@@ -5,6 +5,13 @@
   pointer-events: none;
 }
 
+.sidebarDock {
+  position: absolute;
+  top: 8rem;
+  left: 1.5rem;
+  pointer-events: auto;
+}
+
 .dock {
   position: absolute;
   bottom: 1.5rem;
