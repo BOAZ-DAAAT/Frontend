@@ -144,3 +144,9 @@ vite.config.ts.timestamp-*
 
 # Local tool memory
 .omc/
+
+# macOS
+.DS_Store
+
+# Local preview/tooling config
+.claude/
