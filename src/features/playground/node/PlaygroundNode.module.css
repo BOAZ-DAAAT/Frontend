@@ -1,0 +1,54 @@
+.node {
+  box-sizing: border-box;
+  min-width: 17.5rem;
+  max-width: 20rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.75rem;
+  background: var(--color-surface);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.iconBox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.25rem;
+  background: var(--color-brand-primary);
+  color: var(--color-surface);
+}
+
+.icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-brand-primary);
+}
+
+.description {
+  margin: 0.5rem 0 0;
+  font-size: var(--text-xs);
+  color: color-mix(in srgb, var(--color-brand-primary) 55%, transparent);
+}
+
+/* React Flow 기본 handle을 다크 필드 원으로 (specificity로 덮어씀) */
+.node :global(.react-flow__handle) {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  min-height: 10px;
+  border: none;
+  background: var(--color-brand-primary);
+}
