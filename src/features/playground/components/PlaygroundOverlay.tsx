@@ -1,4 +1,4 @@
-import { PromptComposer } from '@/features/playground/components/PromptComposer';
+import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
 import { Toolbar } from '@/features/playground/toolbar/Toolbar';
 
