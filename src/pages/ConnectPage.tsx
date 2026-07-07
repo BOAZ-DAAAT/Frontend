@@ -46,6 +46,7 @@ export function ConnectPage() {
         setError(null);
         try {
             const res = await ingestDatabase(conn, selectedDb, targetDb || undefined);
+            localStorage.setItem('daaat.sessionDb', res.target_database);
             setIngestResult(res);
         } catch (e) {
             setError(e instanceof Error ? e.message : '적재에 실패했습니다.');
