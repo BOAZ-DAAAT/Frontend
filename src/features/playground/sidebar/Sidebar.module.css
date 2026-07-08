@@ -9,7 +9,6 @@
   max-height: calc(100vh - 3rem);
   overflow-y: auto;
   scrollbar-width: none;
-  transition: width 0.18s ease;
 }
 
 .sidebar::-webkit-scrollbar {

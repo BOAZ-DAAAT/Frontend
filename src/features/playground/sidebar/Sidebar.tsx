@@ -2,12 +2,13 @@ import LogoIcon from '@/components/icons/DAT_temp.svg?react';
 
 import { useSidebar } from './SidebarContext';
 import { SidebarTree } from './SidebarTree';
-import { sidebarSections } from './data';
+import { useSidebarData } from './useSidebarData';
 import { sectionIconMap } from './iconMap';
 import styles from './Sidebar.module.css';
 
 export function Sidebar() {
   const { activeSection, isExpanded, openSection } = useSidebar();
+  const sidebarSections = useSidebarData();
 
   return (
     <aside className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed}`}>
