@@ -1,26 +1,26 @@
 import { useEffect, useState } from 'react';
 
-import { previewLocalTable } from '@/features/datasources/api';
 import type { PreviewResponse } from '@/features/datasources/types';
+import { previewSessionTable } from '@/features/session/api';
 
 type Props = {
-  database: string;
+  sessionId: string;
   table: string;
   onClose: () => void;   // 부모(PlaygroundPage)가 "닫는 법"을 넘겨줌
 };
 
 // 사본 테이블 데이터를 표로 보여주는 오버레이 패널
-export function TablePreviewPanel({ database, table, onClose }: Props) {
+export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
   const [data, setData] = useState<PreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // database/table이 바뀔 때마다 해당 테이블 데이터를 새로 불러온다
+  // session/table이 바뀔 때마다 해당 테이블 데이터를 새로 불러온다
   useEffect(() => {
     let cancelled = false;
     setData(null);
     setError(null);
 
-    previewLocalTable(database, table)
+    previewSessionTable(sessionId, table)
       .then((res) => {
         if (!cancelled) setData(res);
       })
@@ -31,7 +31,7 @@ export function TablePreviewPanel({ database, table, onClose }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [database, table]);
+  }, [sessionId, table]);
 
   return (
     // 배경(어두운 막) 클릭 시 닫힘

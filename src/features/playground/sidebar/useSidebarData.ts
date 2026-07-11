@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 
-import { listLocalTables } from '@/features/datasources/api';
+import { listSessionTables } from '@/features/session/api';
+import { getCurrentSessionId } from '@/features/session/currentSession';
 
 import { sidebarSections as mockSections } from './data';
 import type { SidebarSection } from './types';
 
-// 연결 단계에서 적재한 "세션 DB"의 테이블들로 Database 섹션을 채운다
+// 연결 단계에서 생성한 세션의 원본 사본 테이블들로 Database 섹션을 채운다
 export function useSidebarData(): SidebarSection[] {
     const [sections, setSections] = useState<SidebarSection[]>(mockSections);
 
@@ -13,22 +14,22 @@ export function useSidebarData(): SidebarSection[] {
         let cancelled = false;
 
         async function load() {
-            // 적재 때 기록해둔 이번 세션의 DB 이름 (없으면 = 아직 연결 안 함 → mock 유지)
-            const sessionDb = localStorage.getItem('daaat.sessionDb');
-            if (!sessionDb) return;
+            // 현재 선택된 세션 id가 없으면 아직 연결 전이므로 mock 유지
+            const sessionId = getCurrentSessionId();
+            if (!sessionId) return;
 
             try {
-                const { tables } = await listLocalTables(sessionDb);
+                const { tables } = await listSessionTables(sessionId);
                 if (cancelled) return;
 
-                // "원본 데이터" 폴더 하나에 세션 DB의 테이블 전부
+                // "원본 데이터" 폴더 하나에 현재 세션의 원본 사본 테이블 전부
                 const items = [
                     {
-                        id: `db:${sessionDb}`,
+                        id: `session:${sessionId}`,
                         label: '원본 데이터',
                         icon: 'folder' as const,
                         children: tables.map((table) => ({
-                            id: `table:${sessionDb}:${table}`,
+                            id: `table:${sessionId}:${table}`,
                             label: table,
                             icon: 'table' as const,
                         })),
