@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ingestDatabase, listRemoteDatabases } from '@/features/datasources/api';
-import type { IngestResponse, MySQLConn } from '@/features/datasources/types';
+import { listRemoteDatabases } from '@/features/datasources/api';
+import type { MySQLConn } from '@/features/datasources/types';
+import { createSession } from '@/features/session/api';
+import { setCurrentSessionId } from '@/features/session/currentSession';
+import type { SessionCreateResponse } from '@/features/session/types';
 
 // 서비스 진입 화면: 원격 MySQL 접속 → DB 선택·적재 → playground 이동
 export function ConnectPage() {
@@ -17,8 +20,7 @@ export function ConnectPage() {
     // 진행 상태 (null = 아직 그 단계 전)
     const [databases, setDatabases] = useState<string[] | null>(null);
     const [selectedDb, setSelectedDb] = useState('');
-    const [targetDb, setTargetDb] = useState(''); // 사본 이름 (선택 입력, 로컬 테스트용)
-    const [ingestResult, setIngestResult] = useState<IngestResponse | null>(null);
+    const [sessionResult, setSessionResult] = useState<SessionCreateResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -45,11 +47,14 @@ export function ConnectPage() {
         setLoading(true);
         setError(null);
         try {
-            const res = await ingestDatabase(conn, selectedDb, targetDb || undefined);
-            localStorage.setItem('daaat.sessionDb', res.target_database);
-            setIngestResult(res);
+            const res = await createSession({
+                ...conn,
+                database: selectedDb,
+            });
+            setCurrentSessionId(res.session.id);
+            setSessionResult(res);
         } catch (e) {
-            setError(e instanceof Error ? e.message : '적재에 실패했습니다.');
+            setError(e instanceof Error ? e.message : '연결에 실패했습니다.');
         } finally {
             setLoading(false);
         }
@@ -95,7 +100,7 @@ export function ConnectPage() {
                 )}
 
                 {/* ── 2단계: DB 선택 + 적재 (연결 후, 적재 전) ── */}
-                {databases !== null && ingestResult === null && (
+                {databases !== null && sessionResult === null && (
                     <div className="mt-6 space-y-4">
                         <p className="text-sm text-slate-300">분석할 데이터베이스를 선택하세요.</p>
                         <select className={inputClass} value={selectedDb}
@@ -104,11 +109,6 @@ export function ConnectPage() {
                                 <option key={db} value={db}>{db}</option>
                             ))}
                         </select>
-                        <label className="block">
-                            <span className="text-sm text-slate-400">사본 이름 (선택 — 비우면 원본과 동일)</span>
-                            <input className={inputClass} placeholder="ex. bike_rental_copy" value={targetDb}
-                                onChange={(e) => setTargetDb(e.target.value)} />
-                        </label>
                         <button
                             className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50"
                             onClick={handleIngest} disabled={loading || !selectedDb}>
@@ -118,13 +118,13 @@ export function ConnectPage() {
                 )}
 
                 {/* ── 3단계: 적재 결과 + 이동 ── */}
-                {ingestResult !== null && (
+                {sessionResult !== null && (
                     <div className="mt-6 space-y-4">
                         <p className="text-sm text-emerald-400">
-                            ✅ 적재 완료: {ingestResult.target_database}
+                            세션 생성 완료: {sessionResult.session.title}
                         </p>
                         <ul className="space-y-1 text-sm text-slate-300">
-                            {Object.entries(ingestResult.tables).map(([table, count]) => (
+                            {Object.entries(sessionResult.tables).map(([table, count]) => (
                                 <li key={table}>{table} — {count.toLocaleString()}행</li>
                             ))}
                         </ul>
