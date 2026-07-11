@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 
+import { clearCurrentSession } from '@/features/session/currentSession';
+
 import { login as loginApi } from './api';
 import type { AuthUser, StoredAuth } from './types';
 
@@ -36,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const logout = useCallback(() => {
         localStorage.removeItem(STORAGE_KEY);
+        clearCurrentSession();
         setAuth(null);
     }, []);
 

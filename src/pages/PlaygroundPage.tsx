@@ -8,13 +8,13 @@ import { ModeProvider } from '@/features/playground/toolbar/ModeContext';
 
 export function PlaygroundPage() {
   // 열려 있는 미리보기 대상 (null = 닫힘)
-  const [preview, setPreview] = useState<{ db: string; table: string } | null>(null);
+  const [preview, setPreview] = useState<{ sessionId: string; table: string } | null>(null);
 
-  // 사이드바 리프 클릭: id("table:DB명:테이블명")를 쪼개 미리보기 열기
+  // 사이드바 리프 클릭: id("table:세션ID:테이블명")를 쪼개 미리보기 열기
   const handleSelect = (node: SidebarNode) => {
-    const [kind, db, table] = node.id.split(':');
-    if (kind === 'table' && db && table) {
-      setPreview({ db, table });
+    const [kind, sessionId, table] = node.id.split(':');
+    if (kind === 'table' && sessionId && table) {
+      setPreview({ sessionId, table });
     }
   };
 
@@ -24,7 +24,7 @@ export function PlaygroundPage() {
         <PlaygroundCanvas />
         {preview && (
           <TablePreviewPanel
-            database={preview.db}
+            sessionId={preview.sessionId}
             table={preview.table}
             onClose={() => setPreview(null)}
           />
