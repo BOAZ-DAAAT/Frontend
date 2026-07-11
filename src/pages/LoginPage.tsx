@@ -14,7 +14,7 @@ export function LoginPage() {
     const [error, setError] = useState<string | null>(null);
 
     // RequireAuth가 튕겨내며 넘겨준 원래 목적지. 없으면(직접 /login 접근) 기본 /connect
-    const from = (location.state as { from?: string } | null)?.from ?? '/connect';
+    const from = (location.state as { from?: string } | null)?.from ?? '/sessions';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
