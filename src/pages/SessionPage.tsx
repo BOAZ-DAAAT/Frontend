@@ -12,7 +12,7 @@ function formatDate(value: string | null) {
     return date.toLocaleString();
 }
 
-export function SessionsPage() {
+export function SessionPage() {
     const navigate = useNavigate();
 
     const [sessions, setSessions] = useState<Session[]>([]);
