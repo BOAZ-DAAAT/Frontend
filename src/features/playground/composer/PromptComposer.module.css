@@ -3,8 +3,50 @@
   padding: 0.75rem 0.75rem;
   border-radius: 1rem;
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
   color: var(--color-brand-primary);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition:
+    box-shadow 500ms ease,
+    border-color 500ms ease;
+}
+
+.generating {
+  border-color: rgb(19 180 255 / 70%);
+
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    0 0 24px 4px rgb(35 64 255 / 25%);
+
+  animation: composerShadowPulse 2s ease-in-out infinite;
+}
+
+@keyframes composerShadowPulse {
+  0% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 5%),
+      0 0 24px 4px rgb(35 64 255 / 25%);
+  }
+
+  50% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 5%),
+      0 0 64px 20px rgb(35 64 255 / 25%);
+  }
+
+  100% {
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 5%),
+      0 0 24px 4px rgb(35 64 255 / 25%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generating {
+    animation: none;
+  }
 }
 
 .textarea {
@@ -46,10 +88,23 @@
   cursor: pointer;
 }
 
-.iconButton:hover {
+.iconButton:not(.sendButton):hover {
   background: var(--color-hover);
 }
 
 .sendButton {
-  border: 1px solid var(--color-border);
+  height: 2rem;
+  width: 3rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(90deg,
+      #DCF4FF 0%,
+      #62CDFF 50%,
+      #DCF4FF 100%) padding-box,
+    linear-gradient(90deg,
+      #ffffff 0%,
+      #13b4ff 50%,
+      #ffffff 100%) border-box;
+  color: #ffffff;
 }
