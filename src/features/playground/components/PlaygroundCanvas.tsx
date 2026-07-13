@@ -3,9 +3,11 @@ import { useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
+import { createAgentRun } from '@/features/agent-runs/api';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import { getCurrentSessionId } from '@/features/session/currentSession';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
 import styles from './PlaygroundCanvas.module.css';
@@ -25,13 +27,19 @@ export function PlaygroundCanvas() {
   const handlePromptSend = async (prompt: string) => {
     if (isGenerating) return;
 
+    const sessionId = getCurrentSessionId();
+    if (!sessionId) {
+      console.error('선택된 세션이 없습니다.');
+      return;
+    }
+
     setIsGenerating(true);
 
     try {
-      // 지금은 LLM 연결 대신 10초 동안 실행 상태를 테스트한다.
-      await new Promise<void>((resolve) => {
-        window.setTimeout(resolve, 10_000);
-      });
+      const run = await createAgentRun(sessionId, prompt);
+      console.info('Agent run created:', run);
+    } catch (error) {
+      console.error('Agent run failed:', error);
     } finally {
       setIsGenerating(false);
     }
