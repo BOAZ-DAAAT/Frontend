@@ -38,9 +38,11 @@
   --color-background: #EAEAEA;
   --color-background-dot: #ffffff;
 
-  --color-surface: #ffffff;
-  --color-border: #e2e8f0;
+  --color-surface: rgb(255 255 255 / 60%);
+  --color-surface-solid: #ffffff;
+  --color-border: #ffffff;
   --color-hover: #f1f5f9;
+  --effect-surface-blur: blur(16px);
 }
 
 body {

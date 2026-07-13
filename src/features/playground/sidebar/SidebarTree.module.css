@@ -16,6 +16,36 @@
   flex-direction: column;
 }
 
+.children {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms ease,
+    opacity 180ms ease,
+    visibility 0s linear 280ms;
+}
+
+.childrenOpen {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    grid-template-rows 280ms ease,
+    opacity 180ms ease 60ms,
+    visibility 0s;
+}
+
+.childrenInner {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -61,4 +91,11 @@
 .meta {
   font-size: var(--text-xs);
   color: color-mix(in srgb, var(--color-brand-primary) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .children,
+  .childrenOpen {
+    transition: none;
+  }
 }

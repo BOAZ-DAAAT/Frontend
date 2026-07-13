@@ -1,4 +1,5 @@
-import { Background, ReactFlow, useEdgesState, useNodesState } from '@xyflow/react';
+import { ReactFlow, useEdgesState, useNodesState } from '@xyflow/react';
+import { useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
@@ -16,10 +17,28 @@ export function PlaygroundCanvas() {
   // 디자인 확인용 샘플 2노드 + 엣지 1개
   const [nodes, , onNodesChange] = useNodesState(playgroundNodes.slice(0, 2));
   const [edges, , onEdgesChange] = useEdgesState(playgroundEdges.slice(0, 1));
+
+  const [isGenerating, setIsGenerating] = useState(false);
+
   const { collapse } = useSidebar();
 
+  const handlePromptSend = async (prompt: string) => {
+    if (isGenerating) return;
+
+    setIsGenerating(true);
+
+    try {
+      // 지금은 LLM 연결 대신 10초 동안 실행 상태를 테스트한다.
+      await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 10_000);
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <div className={styles.canvas}>
+    <div className={`${styles.canvas} ${isGenerating ? styles.generating : ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -29,10 +48,12 @@ export function PlaygroundCanvas() {
         onPaneClick={collapse}
         fitView
       >
-        <Background color="var(--color-background-dot)" gap={24} size={2} />
       </ReactFlow>
 
-      <PlaygroundOverlay />
+      <PlaygroundOverlay
+        isGenerating={isGenerating}
+        onPromptSend={handlePromptSend}
+      />
     </div>
   );
 }
