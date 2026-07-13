@@ -1,4 +1,11 @@
-export type RunStatus = 'created' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type RunStatus =
+  | 'created'
+  | 'running'
+  | 'waiting_approval'
+  | 'waiting_input'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
 
 export type RunCreatePayload = {
   run_id?: string;
