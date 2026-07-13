@@ -2,13 +2,18 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 1rem 0.5rem;
+  padding: 1rem 0.6875rem;
   border-radius: 1rem;
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   max-height: calc(100vh - 3rem);
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: none;
+  transition: width 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar::-webkit-scrollbar {
@@ -17,7 +22,6 @@
 
 .collapsed {
   width: 4.5rem;
-  align-items: center;
 }
 
 .expanded {
@@ -27,6 +31,8 @@
 .logo {
   display: flex;
   justify-content: center;
+  width: 3rem;
+  flex-shrink: 0;
   padding: 0.25rem 0 0.5rem;
 }
 
@@ -47,11 +53,17 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  min-width: 0;
+}
+
+.collapsed .sections {
+  width: 3rem;
 }
 
 .section {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .sectionHeader {
@@ -65,6 +77,9 @@
   background: transparent;
   color: var(--color-brand-primary);
   cursor: pointer;
+  transition:
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 .collapsed .sectionHeader {
@@ -94,8 +109,67 @@
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   white-space: nowrap;
+  animation: sidebarContentReveal 200ms ease-out both;
 }
 
 .tree {
-  padding: 0.25rem 0 0.5rem;
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  padding: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    grid-template-rows 280ms ease,
+    padding-top 280ms ease,
+    padding-bottom 280ms ease,
+    opacity 180ms ease,
+    visibility 0s linear 280ms;
+}
+
+.treeOpen {
+  grid-template-rows: 1fr;
+  padding-top: 0.25rem;
+  padding-bottom: 0.5rem;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition:
+    grid-template-rows 280ms ease,
+    padding-top 280ms ease,
+    padding-bottom 280ms ease,
+    opacity 180ms ease 60ms,
+    visibility 0s;
+}
+
+.treeInner {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@keyframes sidebarContentReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-0.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sectionHeader,
+  .tree,
+  .treeOpen {
+    transition: none;
+  }
+
+  .sectionLabel {
+    animation: none;
+  }
 }

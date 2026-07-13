@@ -5,6 +5,9 @@
   padding: 0.5rem;
   border-radius: 1rem;
   background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
@@ -20,11 +23,12 @@
   padding: 0 1rem;
   border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: transparent;
+  background: var(--color-surface-solid);
   color: var(--color-brand-primary);
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .arrange:hover {

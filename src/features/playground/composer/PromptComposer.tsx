@@ -2,6 +2,11 @@ import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 
 import styles from './PromptComposer.module.css';
 
+interface PromptComposerProps {
+  isGenerating: boolean;
+  onSend: (prompt: string) => Promise<void>;
+}
+
 // TODO: 실제 SVG로 교체 예정.
 function PlusIcon() {
   return (
@@ -26,12 +31,25 @@ function SendIcon() {
   );
 }
 
-export function PromptComposer() {
+export function PromptComposer({
+  isGenerating,
+  onSend,
+}: PromptComposerProps) {
   const { ref, resize } = useAutoResizeTextarea(5);
+  const handleSend = () => {
+    const prompt = ref.current?.value.trim();
+
+    if (!prompt || isGenerating) return;
+
+    void onSend(prompt);
+  };
 
 
   return (
-    <div className={styles.composer}>
+    <div
+      className={`${styles.composer} ${isGenerating ? styles.generating : ''
+        }`}
+    >
       {/* 입력 영역 */}
       <textarea ref={ref} onInput={resize} rows={1} placeholder="프롬프트를 입력해 주세요" className={`${styles.textarea} ${styles.input}`} />
 
@@ -47,6 +65,8 @@ export function PromptComposer() {
           type="button"
           aria-label="전송"
           className={`${styles.iconButton} ${styles.sendButton}`}
+          onClick={handleSend}
+          disabled={isGenerating}
         >
           <SendIcon />
         </button>

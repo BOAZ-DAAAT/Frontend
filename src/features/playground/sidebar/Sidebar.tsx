@@ -21,6 +21,7 @@ export function Sidebar() {
         {sidebarSections.map((section) => {
           const Icon = sectionIconMap[section.icon];
           const isActive = section.id === activeSection;
+          const isTreeOpen = isExpanded && isActive;
 
           return (
             <div key={section.id} className={styles.section}>
@@ -33,11 +34,14 @@ export function Sidebar() {
                 {isExpanded && <span className={styles.sectionLabel}>{section.label}</span>}
               </button>
 
-              {isExpanded && isActive && (
-                <div className={styles.tree}>
+              <div
+                className={`${styles.tree} ${isTreeOpen ? styles.treeOpen : ''}`}
+                aria-hidden={!isTreeOpen}
+              >
+                <div className={styles.treeInner}>
                   <SidebarTree nodes={section.items} />
                 </div>
-              )}
+              </div>
             </div>
           );
         })}

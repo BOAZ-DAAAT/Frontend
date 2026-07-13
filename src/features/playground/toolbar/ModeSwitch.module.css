@@ -5,6 +5,8 @@
   padding: 0.25rem;
   border-radius: 999px;
   background: var(--color-brand-primary);
+
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .segment {
@@ -19,11 +21,15 @@
   background: transparent;
   color: color-mix(in srgb, var(--color-surface) 60%, transparent);
   cursor: pointer;
+  transition:
+    width 320ms cubic-bezier(0.34, 1.35, 0.64, 1),
+    background-color 220ms ease,
+    color 220ms ease;
 }
 
 .selected {
   width: 6.5rem;
-  background: var(--color-surface);
+  background: var(--color-surface-solid);
   color: var(--color-brand-primary);
 }
 
@@ -37,4 +43,27 @@
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   white-space: nowrap;
+  animation: labelReveal 200ms ease-out both;
+}
+
+@keyframes labelReveal {
+  from {
+    opacity: 0;
+    transform: translateX(-0.25rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    transition: none;
+  }
+
+  .label {
+    animation: none;
+  }
 }

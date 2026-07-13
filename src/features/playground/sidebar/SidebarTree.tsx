@@ -48,8 +48,15 @@ function SidebarTreeItem({ node }: { node: SidebarNode }) {
         </span>
       </button>
 
-      {isFolder && isOpen && node.children && (
-        <SidebarTree nodes={node.children} />
+      {isFolder && node.children && (
+        <div
+          className={`${styles.children} ${isOpen ? styles.childrenOpen : ''}`}
+          aria-hidden={!isOpen}
+        >
+          <div className={styles.childrenInner}>
+            <SidebarTree nodes={node.children} />
+          </div>
+        </div>
       )}
     </li>
   );
