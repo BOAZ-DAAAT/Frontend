@@ -1,0 +1,462 @@
+.backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+
+.blurLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: rgb(255 255 255 / 2%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: blurLayerReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.blurLayerClosing {
+  pointer-events: none;
+  animation: blurLayerHide 420ms ease both;
+}
+
+.panel {
+  position: absolute;
+  top: 1.5rem;
+  left: max(19rem, calc(50% - 28.5rem));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  z-index: 1;
+  width: min(57rem, calc(100vw - 20rem));
+  max-height: calc(100vh - 10rem);
+  padding: 1rem 0.5rem 2rem;
+  pointer-events: auto;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 1.5rem;
+  background: rgb(255 255 255 / 20%);
+  color: var(--color-brand-primary);
+  box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
+  transform-origin: top center;
+  animation: panelReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.panelClosing {
+  pointer-events: none;
+  animation: panelHide 420ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.header {
+  display: flex;
+  min-height: 2.5rem;
+  padding: 0 1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.path {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.pathIcon {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  color: var(--color-brand-primary);
+}
+
+.source {
+  overflow: hidden;
+  color: #424242;
+  font-weight: var(--font-normal);
+  text-overflow: ellipsis;
+}
+
+.separator {
+  color: #949494;
+  font-weight: 300;
+}
+
+.tableNameViewport {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.tableName {
+  display: block;
+  overflow: hidden;
+  color: var(--color-brand-primary);
+  font-weight: var(--font-medium);
+  text-overflow: ellipsis;
+}
+
+.tableNameExiting {
+  animation: tableTextExit 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.tableNameEntering {
+  animation: tableTextEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.closeButton {
+  display: grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-brand-primary);
+  cursor: pointer;
+}
+
+.closeButton:hover {
+  background: rgb(255 255 255 / 25%);
+}
+
+.closeButton svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.actions {
+  display: flex;
+  padding: 0 1rem;
+  margin-top: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.actionGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.actionButton {
+  display: inline-flex;
+  height: 2.5rem;
+  padding: 0 1rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 12%);
+  color: var(--color-brand-primary);
+  font-size: var(--text-base);
+  font-weight: var(--font-normal);
+  line-height: 1;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 5%);
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  background: rgb(255 255 255 / 30%);
+}
+
+.actionButton svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.tableSurface {
+  position: relative;
+  display: flex;
+  width: 56rem;
+  max-width: 100%;
+  min-height: 5rem;
+  margin-top: 1rem;
+  padding: 0.5rem;
+  align-self: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 70%);
+  box-shadow: 0 4px 40px rgb(0 0 0 / 5%);
+  transform-origin: top center;
+}
+
+.tableSurfaceInitial {
+  animation: tableSurfaceReveal 320ms 100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tableSurfaceClosing {
+  animation: tableSurfaceHide 320ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+.tableViewport {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: auto;
+  border-radius: 0.5rem;
+  outline: none;
+  scrollbar-width: none;
+}
+
+.tableViewport::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbarTrack {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.25rem;
+  left: 0.5rem;
+  z-index: 2;
+  height: 0.5rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.tableSurface:hover .scrollbarTrack,
+.scrollbarDragging {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scrollbarThumb {
+  height: 100%;
+  border-radius: 999px;
+  background: rgb(52 52 52 / 18%);
+  cursor: grab;
+  touch-action: none;
+  will-change: transform;
+}
+
+.scrollbarDragging .scrollbarThumb {
+  cursor: grabbing;
+}
+
+.tableGrid {
+  min-width: 100%;
+  color: var(--color-brand-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-normal);
+}
+
+.tableTextExiting .headerCell,
+.tableTextExiting .dataCell {
+  animation: tableTextExit 180ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.tableTextEntering .headerCell,
+.tableTextEntering .dataCell {
+  animation: tableTextEnter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.headerRow,
+.dataRow {
+  display: grid;
+  grid-template-columns: var(--table-columns);
+  column-gap: 1.5rem;
+  box-sizing: border-box;
+  padding: 0 0.5rem;
+  align-items: center;
+}
+
+.headerRow {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: #e7ebf8;
+  color: #7f7f7f;
+}
+
+.dataRow {
+  height: 3rem;
+  border-bottom: 1px solid rgb(52 52 52 / 6%);
+  background: transparent;
+}
+
+.headerCell,
+.dataCell {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.idCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.middleEllipsis {
+  display: flex;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.middleEllipsisHead {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.middleEllipsisTail {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.stateMessage {
+  width: 100%;
+  margin: 0;
+  padding: 1rem;
+  color: #7f7f7f;
+  font-size: var(--text-sm);
+  font-weight: var(--font-normal);
+}
+
+.error {
+  color: #b42318;
+}
+
+@keyframes panelReveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 50% 100% 50% round 1.5rem);
+    transform: scale(0.96, 0.92);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 round 1.5rem);
+    transform: scale(1);
+  }
+}
+
+@keyframes panelHide {
+  from {
+    opacity: 1;
+    clip-path: inset(0 round 1.5rem);
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    clip-path: inset(0 50% 100% 50% round 1.5rem);
+    transform: scale(0.96, 0.92);
+  }
+}
+
+@keyframes blurLayerHide {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes blurLayerReveal {
+  from {
+    background: rgb(255 255 255 / 0%);
+    backdrop-filter: blur(0);
+    -webkit-backdrop-filter: blur(0);
+  }
+
+  to {
+    background: rgb(255 255 255 / 2%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
+@keyframes tableSurfaceReveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 50% 100% 50% round 1rem);
+    transform: scale(0.97, 0.94);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0 round 1rem);
+    transform: scale(1);
+  }
+}
+
+@keyframes tableSurfaceHide {
+  from {
+    opacity: 1;
+    clip-path: inset(0 round 1rem);
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    clip-path: inset(0 50% 100% 50% round 1rem);
+    transform: scale(0.97, 0.94);
+  }
+}
+
+@keyframes tableTextExit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes tableTextEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .panel,
+  .blurLayer,
+  .panelClosing,
+  .blurLayerClosing,
+  .tableSurfaceInitial,
+  .tableSurfaceClosing,
+  .tableNameExiting,
+  .tableNameEntering,
+  .tableTextExiting .headerCell,
+  .tableTextExiting .dataCell,
+  .tableTextEntering .headerCell,
+  .tableTextEntering .dataCell {
+    animation-duration: 1ms;
+    animation-delay: 0ms;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  .closeButton,
+  .actionButton {
+    transition: none;
+  }
+}

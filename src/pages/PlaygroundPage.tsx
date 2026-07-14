@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
 import { PlaygroundCanvas } from '@/features/playground/components/PlaygroundCanvas';
-import { TablePreviewPanel } from '@/features/playground/components/TablePreviewPanel';
 import { SidebarProvider } from '@/features/playground/sidebar/SidebarContext';
 import type { SidebarNode } from '@/features/playground/sidebar/types';
 import { ModeProvider } from '@/features/playground/toolbar/ModeContext';
@@ -21,14 +20,7 @@ export function PlaygroundPage() {
   return (
     <ModeProvider>
       <SidebarProvider onSelect={handleSelect}>
-        <PlaygroundCanvas />
-        {preview && (
-          <TablePreviewPanel
-            sessionId={preview.sessionId}
-            table={preview.table}
-            onClose={() => setPreview(null)}
-          />
-        )}
+        <PlaygroundCanvas preview={preview} onClosePreview={() => setPreview(null)} />
       </SidebarProvider>
     </ModeProvider>
   );

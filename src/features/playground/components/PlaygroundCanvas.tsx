@@ -15,7 +15,12 @@ import styles from './PlaygroundCanvas.module.css';
 // 모듈 레벨 상수 (매 렌더 재생성 방지)
 const nodeTypes = { playground: PlaygroundNode };
 
-export function PlaygroundCanvas() {
+type PlaygroundCanvasProps = {
+  preview: { sessionId: string; table: string } | null;
+  onClosePreview: () => void;
+};
+
+export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
   // 디자인 확인용 샘플 2노드 + 엣지 1개
   const [nodes, , onNodesChange] = useNodesState(playgroundNodes.slice(0, 2));
   const [edges, , onEdgesChange] = useEdgesState(playgroundEdges.slice(0, 1));
@@ -61,6 +66,8 @@ export function PlaygroundCanvas() {
       <PlaygroundOverlay
         isGenerating={isGenerating}
         onPromptSend={handlePromptSend}
+        preview={preview}
+        onClosePreview={onClosePreview}
       />
     </div>
   );
