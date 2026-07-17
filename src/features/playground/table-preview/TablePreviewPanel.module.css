@@ -23,7 +23,7 @@
 .panel {
   position: absolute;
   top: 1.5rem;
-  left: max(19rem, calc(50% - 28.5rem));
+  left: max(17.5rem, calc(50% - 28.5rem));
   display: flex;
   flex-direction: column;
   box-sizing: border-box;

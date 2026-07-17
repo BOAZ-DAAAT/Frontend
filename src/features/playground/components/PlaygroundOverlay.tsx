@@ -1,8 +1,11 @@
+import { AccountStack } from '@/features/playground/account/AccountStack';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
+import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
+import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import { TablePreviewPanel } from '@/features/playground/table-preview/TablePreviewPanel';
 import { Toolbar } from '@/features/playground/toolbar/Toolbar';
 
-import { TablePreviewPanel } from './TablePreviewPanel';
 import styles from './PlaygroundOverlay.module.css';
 
 interface PlaygroundOverlayProps {
@@ -18,6 +21,9 @@ export function PlaygroundOverlay({
   preview,
   onClosePreview,
 }: PlaygroundOverlayProps) {
+  const { activeSection, view } = useSidebar();
+  const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
+
   return (
     // 캔버스 전체를 덮되, 클릭은 통과시키고(overlay: pointer-events none)
     // 실제 UI 요소(dock)에서만 클릭을 받는다(pointer-events auto)
@@ -26,6 +32,12 @@ export function PlaygroundOverlay({
       <div className={styles.toolbarDock}>
         <Toolbar />
       </div>
+
+      <div className={styles.accountDock}>
+        <AccountStack />
+      </div>
+
+      {isReportWorkspaceOpen && <ReportWorkspace />}
 
       {preview && (
         <TablePreviewPanel

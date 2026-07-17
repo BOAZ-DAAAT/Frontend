@@ -1,0 +1,36 @@
+.stack {
+  display: flex;
+  box-sizing: border-box;
+  height: 3rem;
+  padding: 3px;
+  align-items: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 1.5rem;
+  background: rgb(255 255 255 / 20%);
+  color: var(--color-brand-primary);
+  box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
+  cursor: pointer;
+}
+
+.avatarItem {
+  display: block;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 2.5rem;
+}
+
+.avatarItem + .avatarItem {
+  margin-left: -0.75rem;
+}
+
+.avatarItem:nth-child(1) {
+  z-index: 1;
+}
+
+.avatarItem:nth-child(2) {
+  z-index: 2;
+}
+
+.avatarItem:nth-child(3) {
+  z-index: 3;
+}

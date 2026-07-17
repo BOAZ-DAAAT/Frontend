@@ -5,12 +5,14 @@ import type { SidebarNode, SidebarSectionId } from './types';
 type SidebarState = {
   activeSection: SidebarSectionId | null; // null = 아무 섹션도 선택 안 됨(초기 레일)
   isExpanded: boolean;
+  view: 'navigation' | 'sessions';
   expandedFolders: Set<string>;
   selectedItemId: string | null;
 };
 
 type SidebarAction =
   | { type: 'openSection'; section: SidebarSectionId }
+  | { type: 'toggleSessions' }
   | { type: 'collapse' }
   | { type: 'toggleFolder'; id: string }
   | { type: 'selectItem'; id: string };
@@ -18,6 +20,7 @@ type SidebarAction =
 const initialState: SidebarState = {
   activeSection: null,
   isExpanded: false,
+  view: 'navigation',
   expandedFolders: new Set(),
   selectedItemId: null,
 };
@@ -25,10 +28,15 @@ const initialState: SidebarState = {
 function reducer(state: SidebarState, action: SidebarAction): SidebarState {
   switch (action.type) {
     case 'openSection':
-      return { ...state, activeSection: action.section, isExpanded: true };
+      return { ...state, activeSection: action.section, isExpanded: true, view: 'navigation' };
+    case 'toggleSessions':
+      if (state.view === 'sessions') {
+        return { ...state, activeSection: null, isExpanded: false, view: 'navigation' };
+      }
+      return { ...state, activeSection: null, isExpanded: true, view: 'sessions' };
     case 'collapse':
       // 레일로 돌아오면 섹션 선택도 해제 (초기 상태처럼)
-      return { ...state, isExpanded: false, activeSection: null };
+      return { ...state, isExpanded: false, activeSection: null, view: 'navigation' };
     case 'toggleFolder': {
       const next = new Set(state.expandedFolders);
       if (next.has(action.id)) next.delete(action.id);
@@ -44,6 +52,7 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
 
 type SidebarContextValue = SidebarState & {
   openSection: (section: SidebarSectionId) => void;
+  toggleSessions: () => void;
   collapse: () => void;
   toggleFolder: (id: string) => void;
   selectItem: (node: SidebarNode) => void;
@@ -64,6 +73,7 @@ export function SidebarProvider({ children, onSelect }: SidebarProviderProps) {
     () => ({
       ...state,
       openSection: (section) => dispatch({ type: 'openSection', section }),
+      toggleSessions: () => dispatch({ type: 'toggleSessions' }),
       collapse: () => dispatch({ type: 'collapse' }),
       toggleFolder: (id) => dispatch({ type: 'toggleFolder', id }),
       selectItem: (node) => {
