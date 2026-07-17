@@ -31,5 +31,9 @@ export type RunEvent = {
   message: string;
   node_name?: string | null;
   tool_name?: string | null;
+  artifact_ids?: string[];
+  approval_id?: string | null;
+  memory_ids?: string[];
+  metadata?: Record<string, unknown>;
   created_at?: string;
 };

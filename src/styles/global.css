@@ -45,6 +45,8 @@
 
   --effect-surface-blur: blur(4px);
 
+}
+
 body {
   min-width: 320px;
   margin: 0;

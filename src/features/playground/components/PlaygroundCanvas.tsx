@@ -1,11 +1,13 @@
 import { ReactFlow, useEdgesState, useNodesState } from '@xyflow/react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
 import { createAgentRun } from '@/features/agent-runs/api';
+import { useAgentRunPolling } from '@/features/agent-runs/hooks';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
+import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import { getCurrentSessionId } from '@/features/session/currentSession';
 
@@ -21,13 +23,36 @@ type PlaygroundCanvasProps = {
 };
 
 export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
-  // 디자인 확인용 샘플 2노드 + 엣지 1개
-  const [nodes, , onNodesChange] = useNodesState(playgroundNodes.slice(0, 2));
-  const [edges, , onEdgesChange] = useEdgesState(playgroundEdges.slice(0, 1));
+  const initialGraph = useMemo(
+    () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
+    [],
+  );
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
 
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [isStartingRun, setIsStartingRun] = useState(false);
+  const { run, events } = useAgentRunPolling(activeRunId);
 
   const { collapse } = useSidebar();
+  const isRunActive = Boolean(
+    activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
+  );
+  const isGenerating = isStartingRun || isRunActive;
+
+  useEffect(() => {
+    const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
+    setNodes((currentNodes) => {
+      const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
+      return nextGraph.nodes.map((node) => {
+        const currentNode = currentNodesById.get(node.id);
+        return currentNode
+          ? { ...node, position: currentNode.position }
+          : node;
+      });
+    });
+    setEdges(nextGraph.edges);
+  }, [events, setEdges, setNodes]);
 
   const handlePromptSend = async (prompt: string) => {
     if (isGenerating) return;
@@ -38,15 +63,16 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       return;
     }
 
-    setIsGenerating(true);
+    setIsStartingRun(true);
+    setActiveRunId(null);
 
     try {
       const run = await createAgentRun(sessionId, prompt);
-      console.info('Agent run created:', run);
+      setActiveRunId(run.run_id);
     } catch (error) {
       console.error('Agent run failed:', error);
     } finally {
-      setIsGenerating(false);
+      setIsStartingRun(false);
     }
   };
 
