@@ -2,7 +2,8 @@ export type PlaygroundNodeKind =
     'datasource'
     | 'sql-agent'
     | 'EDA-agent'
-    | 'analysis-agent';
+    | 'analysis-agent'
+    | 'insight-agent';
 
 export type PlaygroundNodeStatus =
     'idle'
@@ -15,4 +16,7 @@ export type PlaygroundNodeData = {
     description: string;
     kind: PlaygroundNodeKind;
     status: PlaygroundNodeStatus;
+    eventType?: string;
+    lastMessage?: string;
+    lastEventAt?: string;
 };

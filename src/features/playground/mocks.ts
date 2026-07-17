@@ -47,6 +47,17 @@ export const playgroundNodes: Node<PlaygroundNodeData>[] = [
       status: 'idle',
     },
   },
+  {
+    id: 'insight-agent',
+    type: 'playground',
+    position: { x: 1440, y: 120 },
+    data: {
+      label: 'Insight Agent',
+      description: '분석 결과를 바탕으로 핵심 인사이트를 정리합니다.',
+      kind: 'insight-agent',
+      status: 'idle',
+    },
+  },
 ];
 
 // 정적(애니메이션 없음) 회색 점선 엣지
@@ -73,6 +84,14 @@ export const playgroundEdges: Edge[] = [
     id: 'eda-to-analysis',
     source: 'eda-agent',
     target: 'analysis-agent',
+    type: 'default',
+    animated: false,
+    style: edgeStyle,
+  },
+  {
+    id: 'analysis-to-insight',
+    source: 'analysis-agent',
+    target: 'insight-agent',
     type: 'default',
     animated: false,
     style: edgeStyle,
