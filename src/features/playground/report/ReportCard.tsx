@@ -1,8 +1,10 @@
 import {
+  Fragment,
   useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from 'react';
 import { FileText, X } from 'lucide-react';
 
@@ -28,6 +30,140 @@ type ThumbnailStyle = CSSProperties & {
   viewTransitionName?: string;
 };
 
+function formatInlineMarkdown(text: string): ReactNode[] {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+
+    if (part.startsWith('`') && part.endsWith('`')) {
+      return <code key={index}>{part.slice(1, -1)}</code>;
+    }
+
+    return <Fragment key={index}>{part}</Fragment>;
+  });
+}
+
+function parseTable(lines: string[], startIndex: number) {
+  const rows: string[][] = [];
+  let index = startIndex;
+
+  while (index < lines.length && lines[index].trim().startsWith('|')) {
+    const line = lines[index].trim();
+    const cells = line
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim());
+
+    const isSeparator = cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    if (!isSeparator) rows.push(cells);
+    index += 1;
+  }
+
+  return { rows, nextIndex: index };
+}
+
+function MarkdownContent({ markdown }: { markdown: string }) {
+  const lines = markdown.trim().split('\n');
+  const blocks: ReactNode[] = [];
+  let paragraph: string[] = [];
+  let list: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraph.length) return;
+    const text = paragraph.join(' ');
+    blocks.push(<p key={`p-${blocks.length}`}>{formatInlineMarkdown(text)}</p>);
+    paragraph = [];
+  };
+
+  const flushList = () => {
+    if (!list.length) return;
+    blocks.push(
+      <ul key={`ul-${blocks.length}`}>
+        {list.map((item) => (
+          <li key={item}>{formatInlineMarkdown(item)}</li>
+        ))}
+      </ul>,
+    );
+    list = [];
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+
+    if (!line) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    if (line.startsWith('|')) {
+      flushParagraph();
+      flushList();
+      const { rows, nextIndex } = parseTable(lines, index);
+      const [head, ...body] = rows;
+
+      if (head) {
+        blocks.push(
+          <div className={styles.tableWrap} key={`table-${blocks.length}`}>
+            <table>
+              <thead>
+                <tr>
+                  {head.map((cell) => (
+                    <th key={cell}>{formatInlineMarkdown(cell)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {body.map((row, rowIndex) => (
+                  <tr key={`${row.join('-')}-${rowIndex}`}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={`${cell}-${cellIndex}`}>{formatInlineMarkdown(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>,
+        );
+      }
+
+      index = nextIndex - 1;
+      continue;
+    }
+
+    if (line.startsWith('## ')) {
+      flushParagraph();
+      flushList();
+      blocks.push(<h3 key={`h-${blocks.length}`}>{formatInlineMarkdown(line.slice(3))}</h3>);
+      continue;
+    }
+
+    if (line.startsWith('### ')) {
+      flushParagraph();
+      flushList();
+      blocks.push(<h4 key={`h-${blocks.length}`}>{formatInlineMarkdown(line.slice(4))}</h4>);
+      continue;
+    }
+
+    if (line.startsWith('- ')) {
+      flushParagraph();
+      list.push(line.slice(2));
+      continue;
+    }
+
+    paragraph.push(line);
+  }
+
+  flushParagraph();
+  flushList();
+
+  return <div className={styles.markdown}>{blocks}</div>;
+}
+
 function ReportContent({ report }: { report: Report }) {
   return (
     <div className={styles.content}>
@@ -37,15 +173,7 @@ function ReportContent({ report }: { report: Report }) {
       </div>
 
       <h2 className={styles.title}>{report.title}</h2>
-      <p className={styles.greeting}>{report.greeting}</p>
-
-      <div className={styles.copy}>
-        {report.paragraphs.map((paragraph) => (
-          <p key={paragraph}>{paragraph}</p>
-        ))}
-      </div>
-
-      <p className={styles.signoff}>{report.signoff}</p>
+      <MarkdownContent markdown={report.markdown} />
     </div>
   );
 }
@@ -113,7 +241,7 @@ export function ReportCard({
             type="button"
             className={styles.closeButton}
             onClick={onClose}
-            aria-label="레포트 닫기"
+            aria-label="리포트 닫기"
           >
             <X aria-hidden="true" />
           </button>
@@ -157,7 +285,7 @@ export function ReportCard({
           type="button"
           className={styles.thumbnailButton}
           onClick={onOpen}
-          aria-label={`${report.title} 레포트 열기`}
+          aria-label={`${report.title} 리포트 열기`}
         />
       </div>
     );
