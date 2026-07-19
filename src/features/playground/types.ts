@@ -16,6 +16,10 @@ export type PlaygroundNodeData = {
     description: string;
     kind: PlaygroundNodeKind;
     status: PlaygroundNodeStatus;
+    chart?: {
+        label: string;
+        values: number[];
+    };
     eventType?: string;
     lastMessage?: string;
     lastEventAt?: string;

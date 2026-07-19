@@ -1,0 +1,25 @@
+.value {
+  display: block;
+  min-width: 0;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.editor {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+}
+
+.textarea {
+  min-height: 3.75rem;
+  resize: none;
+}

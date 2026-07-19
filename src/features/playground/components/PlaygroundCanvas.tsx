@@ -1,14 +1,17 @@
-import { ReactFlow, useEdgesState, useNodesState } from '@xyflow/react';
-import { useEffect, useMemo, useState } from 'react';
+import { ReactFlow, useEdgesState, useNodesState, type Edge } from '@xyflow/react';
+import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
 import { createAgentRun } from '@/features/agent-runs/api';
 import { useAgentRunPolling } from '@/features/agent-runs/hooks';
+import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
+import type { CreatableNodeKind } from '@/features/playground/node-editor';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
 import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import type { PlaygroundNodeData } from '@/features/playground/types';
 import { getCurrentSessionId } from '@/features/session/currentSession';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
@@ -16,6 +19,26 @@ import styles from './PlaygroundCanvas.module.css';
 
 // 모듈 레벨 상수 (매 렌더 재생성 방지)
 const nodeTypes = { playground: PlaygroundNode };
+const edgeTypes = { playground: PlaygroundEdge };
+
+const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' | 'description'>> = {
+  'sql-agent': {
+    label: 'SQL Agent',
+    description: '새 SQL 작업을 작성하세요.',
+  },
+  'EDA-agent': {
+    label: 'EDA Agent',
+    description: '새 탐색 작업을 작성하세요.',
+  },
+  'analysis-agent': {
+    label: 'Analysis Agent',
+    description: '새 분석 작업을 작성하세요.',
+  },
+  'insight-agent': {
+    label: 'Insight Agent',
+    description: '새 인사이트 작업을 작성하세요.',
+  },
+};
 
 type PlaygroundCanvasProps = {
   preview: { sessionId: string; table: string } | null;
@@ -44,14 +67,33 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
     setNodes((currentNodes) => {
       const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
-      return nextGraph.nodes.map((node) => {
+      const eventNodes = nextGraph.nodes.map((node) => {
         const currentNode = currentNodesById.get(node.id);
         return currentNode
           ? { ...node, position: currentNode.position }
           : node;
       });
+      const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
+
+      return [...eventNodes, ...manualNodes];
     });
-    setEdges(nextGraph.edges);
+    setEdges((currentEdges) => {
+      const currentEdgesById = new Map(currentEdges.map((edge) => [edge.id, edge]));
+      const manualEdges = currentEdges.filter((edge) => edge.id.startsWith('manual-edge-'));
+      const eventEdges = nextGraph.edges.map((edge) => {
+        const currentEdge = currentEdgesById.get(edge.id);
+        if (!currentEdge) return edge;
+
+        const data = { ...edge.data, ...currentEdge.data };
+        return {
+          ...edge,
+          data,
+          zIndex: data.flowState === 'active' ? 10 : 0,
+        };
+      });
+
+      return [...eventEdges, ...manualEdges];
+    });
   }, [events, setEdges, setNodes]);
 
   const handlePromptSend = async (prompt: string) => {
@@ -76,15 +118,80 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }
   };
 
+  const handleCreateNode = (kind: CreatableNodeKind) => {
+    const selectedNode = nodes.find((node) => node.selected);
+    const childCount = selectedNode
+      ? edges.filter((edge) => edge.source === selectedNode.id).length
+      : 0;
+    const nodeId = `manual-${crypto.randomUUID()}`;
+
+    setNodes((currentNodes) => {
+      const manualNodeCount = currentNodes.filter((node) => node.id.startsWith('manual-')).length;
+      const column = manualNodeCount % 3;
+      const row = Math.floor(manualNodeCount / 3);
+
+      return [
+        ...currentNodes,
+        {
+          id: nodeId,
+          type: 'playground',
+          position: selectedNode
+            ? {
+                x: selectedNode.position.x + 336,
+                y: selectedNode.position.y + childCount * 180,
+              }
+            : { x: 280 + column * 336, y: 320 + row * 180 },
+          data: {
+            ...NODE_DEFAULTS[kind],
+            kind,
+            status: 'idle',
+          },
+        },
+      ];
+    });
+
+    if (selectedNode) {
+      setEdges((currentEdges) => [
+        ...currentEdges,
+        {
+          id: `manual-edge-${crypto.randomUUID()}`,
+          source: selectedNode.id,
+          target: nodeId,
+          type: 'playground',
+          selectable: false,
+        },
+      ]);
+    }
+  };
+
+  const handleEdgeClick = (_event: ReactMouseEvent, clickedEdge: Edge) => {
+    setEdges((currentEdges) => currentEdges.map((edge) => {
+      if (edge.id !== clickedEdge.id) return edge;
+
+      const isActive = edge.data?.flowState === 'active';
+      return {
+        ...edge,
+        zIndex: isActive ? 0 : 10,
+        data: {
+          ...edge.data,
+          flowState: isActive ? 'idle' : 'active',
+        },
+      };
+    }));
+  };
+
   return (
     <div className={`${styles.canvas} ${isGenerating ? styles.generating : ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onEdgeClick={handleEdgeClick}
         onPaneClick={collapse}
+        selectNodesOnDrag={false}
         fitView
       >
       </ReactFlow>
@@ -94,6 +201,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         onPromptSend={handlePromptSend}
         preview={preview}
         onClosePreview={onClosePreview}
+        onCreateNode={handleCreateNode}
       />
     </div>
   );

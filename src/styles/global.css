@@ -43,6 +43,9 @@
   --color-border: #ffffff;
   --color-hover: #f1f5f9;
 
+  --color-flow-active: #343434;
+  --color-flow-active-rgb: 143 155 216;
+
   --effect-surface-blur: blur(4px);
 
 }

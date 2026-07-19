@@ -1,5 +1,6 @@
 import { AccountStack } from '@/features/playground/account/AccountStack';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
+import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-editor';
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
@@ -13,6 +14,7 @@ interface PlaygroundOverlayProps {
   onPromptSend: (prompt: string) => Promise<void>;
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
+  onCreateNode: (kind: CreatableNodeKind) => void;
 }
 
 export function PlaygroundOverlay({
@@ -20,6 +22,7 @@ export function PlaygroundOverlay({
   onPromptSend,
   preview,
   onClosePreview,
+  onCreateNode,
 }: PlaygroundOverlayProps) {
   const { activeSection, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
@@ -35,6 +38,10 @@ export function PlaygroundOverlay({
 
       <div className={styles.accountDock}>
         <AccountStack />
+      </div>
+
+      <div className={styles.nodeCreatorDock}>
+        <NodeCreator onCreate={onCreateNode} />
       </div>
 
       {isReportWorkspaceOpen && <ReportWorkspace />}
