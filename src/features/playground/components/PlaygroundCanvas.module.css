@@ -4,12 +4,9 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #e1dad9;
-  background-image: radial-gradient(ellipse 88% 105% at 50% calc(100% - 1.5rem),
-      #F2F6FC 0%,
-      #E2EAF6 38%,
-      #E1EAF7 68%,
-      #F0F2F7 100%);
+  background:
+    radial-gradient(ellipse 70% 62% at 50% 72%, #d2ddeb 0%, #dde6f2 42%, transparent 72%),
+    radial-gradient(ellipse 98% 86% at 50% 42%, #f6f8fc 0%, #eef2f8 54%, #dbe3ef 100%);
 }
 
 .canvas::before {
@@ -24,6 +21,24 @@
   transform: translate3d(-8%, -4%, 0) scale(1.1);
   transition: opacity 500ms ease;
   will-change: transform, opacity;
+}
+
+.canvas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% 92%, transparent 0 15.5rem, rgb(255 255 255 / 36%) 15.58rem 15.66rem, transparent 15.76rem),
+    radial-gradient(circle at 50% 92%, transparent 0 24rem, rgb(255 255 255 / 28%) 24.08rem 24.16rem, transparent 24.28rem),
+    radial-gradient(circle at 50% 92%, transparent 0 34rem, rgb(255 255 255 / 20%) 34.08rem 34.16rem, transparent 34.28rem);
+  background-size:
+    auto,
+    auto,
+    auto;
+  mask-image: radial-gradient(ellipse 78% 76% at 50% 58%, #000 0%, transparent 78%);
+  opacity: 0.8;
 }
 
 .generating::before {
