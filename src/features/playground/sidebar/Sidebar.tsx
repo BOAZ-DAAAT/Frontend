@@ -1,4 +1,5 @@
 import { AccountAvatar } from '@/features/playground/account/AccountAvatar';
+import sidebarProfileImage from '@/features/playground/account/assets/sidebar-profile.png';
 
 import { useSidebar } from './SidebarContext';
 import { SidebarTree } from './SidebarTree';
@@ -25,7 +26,7 @@ export function Sidebar() {
         aria-label={isSessionView ? '세션 선택 닫기' : '세션 선택 열기'}
         aria-pressed={isSessionView}
       >
-        <AccountAvatar size="compact" />
+        <AccountAvatar size="compact" imageSrc={sidebarProfileImage} />
       </button>
       <div className={styles.divider} />
 

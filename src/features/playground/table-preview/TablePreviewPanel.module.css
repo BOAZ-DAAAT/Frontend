@@ -9,7 +9,7 @@
   position: absolute;
   inset: 0;
   pointer-events: auto;
-  background: rgb(255 255 255 / 2%);
+  background: rgb(0 0 0 / 5%);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   animation: blurLayerReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -370,13 +370,13 @@
 
 @keyframes blurLayerReveal {
   from {
-    background: rgb(255 255 255 / 0%);
+    background: rgb(0 0 0 / 0%);
     backdrop-filter: blur(0);
     -webkit-backdrop-filter: blur(0);
   }
 
   to {
-    background: rgb(255 255 255 / 2%);
+    background: rgb(0 0 0 / 5%);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }

@@ -1,6 +1,8 @@
 import { Clock3, FileText, Plus, Workflow } from 'lucide-react';
 
 import { AccountAvatar } from '@/features/playground/account/AccountAvatar';
+import accountProfileTwo from '@/features/playground/account/assets/account-profile-2.png';
+import sidebarProfileImage from '@/features/playground/account/assets/sidebar-profile.png';
 
 import styles from './SessionSidebar.module.css';
 
@@ -39,7 +41,16 @@ export function SessionSidebar({ nodeCount = 2, reportCount = 4 }: SessionSideba
             <div className={styles.avatarStack}>
               {Array.from({ length: VISIBLE_MEMBERS }, (_, index) => (
                 <span key={index} className={styles.avatarItem}>
-                  <AccountAvatar size="tiny" />
+                  <AccountAvatar
+                    size="tiny"
+                    imageSrc={
+                      index === 1
+                        ? accountProfileTwo
+                        : index === VISIBLE_MEMBERS - 1
+                          ? sidebarProfileImage
+                          : undefined
+                    }
+                  />
                 </span>
               ))}
             </div>

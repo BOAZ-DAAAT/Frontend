@@ -75,7 +75,10 @@ export function deriveNodeGraphFromEvents(
   baseEdges: Edge[],
 ): { nodes: Node<PlaygroundNodeData>[]; edges: Edge[] } {
   const nodesById = new Map(baseNodes.map((node) => [node.id, node]));
-  const visibleNodeIds = new Set(['datasource', 'sql-agent']);
+  const visibleNodeIds = new Set([
+    'datasource',
+    'sql-agent',
+  ]);
   const nodeDataById = new Map<string, Partial<PlaygroundNodeData>>();
 
   for (const event of events) {
@@ -111,7 +114,13 @@ export function deriveNodeGraphFromEvents(
       .filter((node): node is Node<PlaygroundNodeData> => Boolean(node)),
   );
   const nodeIdSet = new Set(nodes.map((node) => node.id));
-  const edges = baseEdges.filter((edge) => nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target));
+  const edges = baseEdges
+    .filter((edge) => nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target))
+    .map((edge) => ({
+      ...edge,
+      selectable: false,
+      zIndex: edge.data?.flowState === 'active' ? 10 : 0,
+    }));
 
   return { nodes, edges };
 }

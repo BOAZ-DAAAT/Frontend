@@ -4,7 +4,7 @@
   gap: 0.25rem;
   padding: 0.25rem;
   border-radius: 999px;
-  background: var(--color-brand-primary);
+  background: var(--color-flow-active);
 
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
 }
@@ -30,7 +30,7 @@
 .selected {
   width: 6.5rem;
   background: var(--color-surface-solid);
-  color: var(--color-brand-primary);
+  color: var(--color-flow-active);
 }
 
 .icon {
