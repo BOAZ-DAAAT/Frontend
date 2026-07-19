@@ -137,7 +137,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           type: 'playground',
           position: selectedNode
             ? {
-                x: selectedNode.position.x + 384,
+                x: selectedNode.position.x + 460,
                 y: selectedNode.position.y + childCount * 200,
               }
             : { x: 280 + column * 384, y: 320 + row * 200 },

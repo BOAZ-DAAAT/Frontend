@@ -58,6 +58,28 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         className={styles.edgeAnchor}
       />
 
+      {isFlowActive ? (
+        <svg
+          className={`${styles.borderFlow} ${
+            hasActiveSource ? styles.borderFlowSource : ''
+          } ${hasActiveTarget ? styles.borderFlowTarget : ''}`}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            className={`${styles.borderFlowPath} ${styles.borderFlowTop}`}
+            d="M 0 50 L 0 6 Q 0 0 6 0 L 94 0 Q 100 0 100 6 L 100 50"
+            pathLength={100}
+          />
+          <path
+            className={`${styles.borderFlowPath} ${styles.borderFlowBottom}`}
+            d="M 0 50 L 0 94 Q 0 100 6 100 L 94 100 Q 100 100 100 94 L 100 50"
+            pathLength={100}
+          />
+        </svg>
+      ) : null}
+
       <div className={styles.header}>
         <span className={styles.iconBox}>
           <NodeIcon className={styles.icon} />
