@@ -8,6 +8,7 @@ export type PlaygroundNodeKind =
 export type PlaygroundNodeStatus =
     'idle'
     | 'running'
+    | 'waiting'
     | 'success'
     | 'error';
 

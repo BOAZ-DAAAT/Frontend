@@ -2,125 +2,129 @@ import type { Edge, Node } from '@xyflow/react';
 
 import type { RunEvent } from '@/features/runs/types';
 
-import type { PlaygroundNodeData, PlaygroundNodeStatus } from './types';
+import type { PlaygroundNodeData, PlaygroundNodeKind, PlaygroundNodeStatus } from './types';
 
-const BACKEND_NODE_TO_PLAYGROUND_ID: Record<string, string> = {
-  sql_agent: 'sql-agent',
-  eda_agent: 'eda-agent',
-  analysis_agent: 'analysis-agent',
-  insight_agent: 'insight-agent',
+const AGENT_PRESENTATION: Record<string, { kind: PlaygroundNodeKind; label: string }> = {
+  sql_agent: { kind: 'sql-agent', label: 'SQL Agent' },
+  eda_agent: { kind: 'EDA-agent', label: 'EDA Agent' },
+  analysis_agent: { kind: 'analysis-agent', label: 'Analysis Agent' },
+  insight: { kind: 'insight-agent', label: 'Insight Agent' },
 };
 
-const NODE_ORDER = ['datasource', 'sql-agent', 'eda-agent', 'analysis-agent', 'insight-agent'];
+const LIFECYCLE_EVENTS = new Set([
+  'agent.started',
+  'agent.progress',
+  'agent.retrying',
+  'agent.waiting',
+  'agent.resumed',
+  'agent.completed',
+  'agent.discarded',
+  'agent.failed',
+]);
 
-function stringFromMetadata(value: unknown): string | null {
+type RuntimeNode = Node<PlaygroundNodeData> & {
+  data: PlaygroundNodeData & {
+    nodeSequence: number;
+    parentNodeId: string | null;
+  };
+};
+
+function metadataString(event: RunEvent, key: string): string | null {
+  const value = event.metadata?.[key];
   return typeof value === 'string' && value ? value : null;
 }
 
-function nodeIdFromEvent(event: RunEvent): string | null {
-  const metadataNode = stringFromMetadata(event.metadata?.agent_name)
-    ?? stringFromMetadata(event.metadata?.agent)
-    ?? stringFromMetadata(event.metadata?.node_name);
-  const rawNodeName = event.node_name || metadataNode;
-
-  if (rawNodeName && BACKEND_NODE_TO_PLAYGROUND_ID[rawNodeName]) {
-    return BACKEND_NODE_TO_PLAYGROUND_ID[rawNodeName];
-  }
-
-  if (event.event_type === 'analysis.progress') {
-    return 'analysis-agent';
-  }
-
-  const stagedAgent = event.message.match(/^(sql_agent|eda_agent|analysis_agent|insight_agent)\b/)?.[1];
-  if (stagedAgent && BACKEND_NODE_TO_PLAYGROUND_ID[stagedAgent]) {
-    return BACKEND_NODE_TO_PLAYGROUND_ID[stagedAgent];
-  }
-
-  return null;
+function metadataNumber(event: RunEvent, key: string): number | null {
+  const value = event.metadata?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
-function statusFromEvent(event: RunEvent): PlaygroundNodeStatus | null {
-  if (event.event_type === 'node.started') return 'running';
-  if (event.event_type === 'node.failed' || event.event_type === 'run.failed') return 'error';
-  if (
-    event.event_type === 'node.completed'
-    || event.event_type === 'result.staged'
-    || event.event_type === 'evidence.promoted'
-    || event.event_type === 'run.completed'
-  ) {
-    return 'success';
-  }
-
-  if (event.event_type === 'analysis.progress') {
-    const status = event.metadata?.status;
-    if (status === 'started') return 'running';
-    if (status === 'completed') return 'success';
-    if (status === 'failed') return 'error';
-  }
-
-  return null;
+function statusFromEvent(event: RunEvent): PlaygroundNodeStatus {
+  if (event.event_type === 'agent.completed') return 'success';
+  if (event.event_type === 'agent.failed') return 'error';
+  if (event.event_type === 'agent.waiting') return 'waiting';
+  return 'running';
 }
 
-function orderedNodes(nodes: Node<PlaygroundNodeData>[]) {
-  return [...nodes].sort((left, right) => {
-    const leftIndex = NODE_ORDER.indexOf(left.id);
-    const rightIndex = NODE_ORDER.indexOf(right.id);
-    return (leftIndex === -1 ? NODE_ORDER.length : leftIndex) - (rightIndex === -1 ? NODE_ORDER.length : rightIndex);
-  });
+function summaryFromEvent(event: RunEvent): string {
+  const summary = event.metadata?.summary;
+  if (summary && typeof summary === 'object' && 'summary' in summary) {
+    const value = (summary as { summary?: unknown }).summary;
+    if (typeof value === 'string' && value) return value;
+  }
+  return event.message;
 }
 
 export function deriveNodeGraphFromEvents(
   events: RunEvent[],
   baseNodes: Node<PlaygroundNodeData>[],
-  baseEdges: Edge[],
+  _baseEdges: Edge[],
 ): { nodes: Node<PlaygroundNodeData>[]; edges: Edge[] } {
-  const nodesById = new Map(baseNodes.map((node) => [node.id, node]));
-  const visibleNodeIds = new Set([
-    'datasource',
-    'sql-agent',
-  ]);
-  const nodeDataById = new Map<string, Partial<PlaygroundNodeData>>();
+  const datasource = baseNodes.find((node) => node.id === 'datasource');
+  const runtimeNodes = new Map<string, RuntimeNode>();
 
   for (const event of events) {
-    const nodeId = nodeIdFromEvent(event);
-    if (!nodeId || !nodesById.has(nodeId)) continue;
+    if (!LIFECYCLE_EVENTS.has(event.event_type)) continue;
 
-    visibleNodeIds.add(nodeId);
-    const nextStatus = statusFromEvent(event);
-    const previousData = nodeDataById.get(nodeId) ?? {};
-    nodeDataById.set(nodeId, {
-      ...previousData,
-      ...(nextStatus ? { status: nextStatus } : {}),
-      description: event.message,
-      eventType: event.event_type,
-      lastMessage: event.message,
-      lastEventAt: event.created_at,
+    const nodeId = metadataString(event, 'node_id');
+    if (!nodeId) continue;
+    if (event.event_type === 'agent.discarded') {
+      runtimeNodes.delete(nodeId);
+      continue;
+    }
+
+    const agentName = metadataString(event, 'agent_name') ?? event.node_name ?? '';
+    const presentation = AGENT_PRESENTATION[agentName];
+    if (!presentation) continue;
+
+    const previous = runtimeNodes.get(nodeId);
+    const nodeSequence = metadataNumber(event, 'node_sequence')
+      ?? previous?.data.nodeSequence
+      ?? runtimeNodes.size + 1;
+    const parentNodeId = metadataString(event, 'parent_node_id')
+      ?? previous?.data.parentNodeId
+      ?? null;
+
+    runtimeNodes.set(nodeId, {
+      id: nodeId,
+      type: 'playground',
+      position: previous?.position ?? { x: nodeSequence * 460, y: 120 },
+      data: {
+        label: presentation.label,
+        description: summaryFromEvent(event),
+        kind: presentation.kind,
+        status: statusFromEvent(event),
+        eventType: event.event_type,
+        lastMessage: event.message,
+        lastEventAt: event.created_at,
+        nodeSequence,
+        parentNodeId,
+      },
     });
   }
 
-  const nodes = orderedNodes(
-    Array.from(visibleNodeIds)
-      .map((nodeId) => {
-        const node = nodesById.get(nodeId);
-        if (!node) return null;
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            ...(nodeDataById.get(nodeId) ?? {}),
-          },
-        };
-      })
-      .filter((node): node is Node<PlaygroundNodeData> => Boolean(node)),
+  const executionNodes = [...runtimeNodes.values()].sort(
+    (left, right) => left.data.nodeSequence - right.data.nodeSequence,
   );
-  const nodeIdSet = new Set(nodes.map((node) => node.id));
-  const edges = baseEdges
-    .filter((edge) => nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target))
-    .map((edge) => ({
-      ...edge,
+  const nodes = datasource ? [datasource, ...executionNodes] : executionNodes;
+  const visibleIds = new Set(nodes.map((node) => node.id));
+  const edges = executionNodes.map((node) => {
+    const requestedParent = node.data.parentNodeId;
+    const source = requestedParent && visibleIds.has(requestedParent)
+      ? requestedParent
+      : 'datasource';
+    const isActive = node.data.status === 'running';
+    return {
+      id: `${source}-to-${node.id}`,
+      source,
+      target: node.id,
+      type: 'playground',
       selectable: false,
-      zIndex: edge.data?.flowState === 'active' ? 10 : 0,
-    }));
+      animated: false,
+      zIndex: isActive ? 10 : 0,
+      data: { flowState: isActive ? 'active' : 'idle' },
+    } satisfies Edge;
+  });
 
   return { nodes, edges };
 }

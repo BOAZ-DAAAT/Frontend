@@ -25,7 +25,8 @@ export type RunSummary = {
 };
 
 export type RunEvent = {
-  event_id?: string;
+  event_id: string;
+  event_key?: string | null;
   run_id: string;
   event_type: string;
   message: string;

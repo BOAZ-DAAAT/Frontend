@@ -1,83 +1,126 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { BackendApiError } from '@/lib/apiClient';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
+import { BackendApiError } from '@/lib/apiClient';
 
-import { getAgentRun, listAgentRunEvents } from './api';
+import { getAgentRun } from './api';
+import { streamAgentRunEvents } from './eventStream';
 
-const POLL_INTERVAL_MS = 1500;
-const TERMINAL_STATUSES = new Set(['succeeded', 'failed', 'cancelled']);
+const RECONNECT_DELAY_MS = 1500;
 
-type UseAgentRunPollingOptions = {
+type UseAgentRunStreamOptions = {
   enabled?: boolean;
 };
 
-type AgentRunPollingState = {
+type AgentRunStreamState = {
   run: RunSummary | null;
   events: RunEvent[];
-  isPolling: boolean;
+  isStreaming: boolean;
   error: string | null;
 };
 
-export function useAgentRunPolling(
+function appendEvent(events: RunEvent[], nextEvent: RunEvent): RunEvent[] {
+  const index = events.findIndex((event) => event.event_id === nextEvent.event_id);
+  if (index === -1) return [...events, nextEvent];
+  return events.map((event, eventIndex) => (
+    eventIndex === index ? nextEvent : event
+  ));
+}
+
+function reconnectDelay(signal: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, RECONNECT_DELAY_MS);
+    signal.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      resolve();
+    }, { once: true });
+  });
+}
+
+export function useAgentRunStream(
   runId: string | null,
-  { enabled = true }: UseAgentRunPollingOptions = {},
-): AgentRunPollingState {
-  const [state, setState] = useState<AgentRunPollingState>({
+  { enabled = true }: UseAgentRunStreamOptions = {},
+): AgentRunStreamState {
+  const [state, setState] = useState<AgentRunStreamState>({
     run: null,
     events: [],
-    isPolling: false,
+    isStreaming: false,
     error: null,
   });
-  const pollTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const stopPolling = () => {
-      if (pollTimerRef.current !== null) {
-        window.clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = null;
-      }
-    };
+    const controller = new AbortController();
 
     if (!runId || !enabled) {
-      stopPolling();
-      setState({ run: null, events: [], isPolling: false, error: null });
-      return stopPolling;
+      setState({ run: null, events: [], isStreaming: false, error: null });
+      return () => controller.abort();
     }
 
-    const syncRunState = async () => {
-      setState((current) => ({ ...current, isPolling: true, error: null }));
-      try {
-        const [run, events] = await Promise.all([
-          getAgentRun(runId),
-          listAgentRunEvents(runId),
-        ]);
-        if (cancelled) return;
+    let lastEventId: string | undefined;
 
-        const shouldContinue = !TERMINAL_STATUSES.has(run.status);
-        setState({ run, events, isPolling: shouldContinue, error: null });
-        if (shouldContinue) {
-          pollTimerRef.current = window.setTimeout(() => {
-            void syncRunState();
-          }, POLL_INTERVAL_MS);
+    const connect = async () => {
+      try {
+        const run = await getAgentRun(runId);
+        if (controller.signal.aborted) return;
+        setState({ run, events: [], isStreaming: true, error: null });
+
+        while (!controller.signal.aborted) {
+          try {
+            for await (const message of streamAgentRunEvents(runId, {
+              signal: controller.signal,
+              lastEventId,
+            })) {
+              if (controller.signal.aborted) return;
+
+              if (message.type === 'run.event') {
+                lastEventId = message.id;
+                setState((current) => ({
+                  ...current,
+                  events: appendEvent(current.events, message.data),
+                  isStreaming: true,
+                  error: null,
+                }));
+              } else {
+                setState((current) => ({
+                  ...current,
+                  run: current.run
+                    ? { ...current.run, status: message.data.status }
+                    : current.run,
+                  isStreaming: false,
+                  error: null,
+                }));
+                return;
+              }
+            }
+          } catch (error) {
+            if (controller.signal.aborted) return;
+            if (error instanceof BackendApiError && error.status < 500) {
+              throw error;
+            }
+            setState((current) => ({
+              ...current,
+              isStreaming: false,
+              error: '실시간 연결이 끊어져 다시 연결하고 있습니다.',
+            }));
+          }
+
+          await reconnectDelay(controller.signal);
         }
       } catch (error) {
-        if (cancelled) return;
+        if (controller.signal.aborted) return;
         const message = error instanceof BackendApiError
           ? error.message
           : '실행 상태를 불러오지 못했습니다.';
-        setState((current) => ({ ...current, isPolling: false, error: message }));
+        setState((current) => ({
+          ...current,
+          isStreaming: false,
+          error: message,
+        }));
       }
     };
 
-    void syncRunState();
-
-    return () => {
-      cancelled = true;
-      stopPolling();
-    };
+    void connect();
+    return () => controller.abort();
   }, [enabled, runId]);
 
   return state;

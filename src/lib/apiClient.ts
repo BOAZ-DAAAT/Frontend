@@ -32,8 +32,8 @@ function authHeader(): Record<string, string> {
   return {};
 }
 
-// 공통 요청 처리: JSON 직렬화 → fetch → 상태코드 검사 → JSON 반환
-async function request<T>(path: string, options: ApiClientOptions = {}): Promise<T> {
+// 공통 요청 처리: JSON 직렬화 → fetch → 상태코드 검사
+async function fetchResponse(path: string, options: ApiClientOptions = {}): Promise<Response> {
   const headers = new Headers(options.headers);
   Object.entries(authHeader()).forEach(([key, value]) => headers.set(key, value)); // 모든 요청에 토큰 자동 부착
   if (options.body !== undefined) {
@@ -70,6 +70,11 @@ async function request<T>(path: string, options: ApiClientOptions = {}): Promise
     throw new BackendApiError(response.status, message);
   }
 
+  return response;
+}
+
+async function request<T>(path: string, options: ApiClientOptions = {}): Promise<T> {
+  const response = await fetchResponse(path, options);
   return (await response.json()) as T;
 }
 
@@ -80,5 +85,9 @@ export const apiClient = {
 
   post<T>(path: string, body: unknown, options?: ApiClientOptions) {
     return request<T>(path, { ...options, method: 'POST', body });
+  },
+
+  stream(path: string, options?: ApiClientOptions) {
+    return fetchResponse(path, { ...options, method: 'GET' });
   },
 };
