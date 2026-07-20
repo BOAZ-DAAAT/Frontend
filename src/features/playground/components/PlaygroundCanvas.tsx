@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from
 import '@xyflow/react/dist/style.css';
 
 import { createAgentRun } from '@/features/agent-runs/api';
-import { useAgentRunPolling } from '@/features/agent-runs/hooks';
+import { useAgentRunStream } from '@/features/agent-runs/hooks';
 import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
 import type { CreatableNodeKind } from '@/features/playground/node-editor';
@@ -55,7 +55,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
-  const { run, events } = useAgentRunPolling(activeRunId);
+  const { run, events } = useAgentRunStream(activeRunId);
 
   const { collapse } = useSidebar();
   const isRunActive = Boolean(
@@ -84,7 +84,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         const currentEdge = currentEdgesById.get(edge.id);
         if (!currentEdge) return edge;
 
-        const data = { ...edge.data, ...currentEdge.data };
+        const data = { ...currentEdge.data, ...edge.data };
         return {
           ...edge,
           data,
