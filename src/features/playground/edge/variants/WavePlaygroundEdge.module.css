@@ -1,0 +1,37 @@
+.edge {
+  fill: none;
+  stroke: rgb(52 52 52 / 15%);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  cursor: pointer;
+  transition: stroke 160ms ease, stroke-width 160ms ease;
+}
+
+.activeInteraction {
+  stroke: transparent;
+  cursor: pointer;
+}
+
+.wave {
+  fill: none;
+  pointer-events: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.waveGray,
+.waveWhite,
+.waveGraySoft {
+  stroke: rgb(255 255 255 / 88%);
+  stroke-width: 0.5px;
+  filter:
+    drop-shadow(0 0 2px rgb(255 255 255 / 100%))
+    drop-shadow(0 0 2px rgb(255 255 255 / 100%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .edge {
+    transition: none;
+  }
+}
