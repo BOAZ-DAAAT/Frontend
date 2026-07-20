@@ -3,90 +3,126 @@ export type Report = {
   title: string;
   author: string;
   date: string;
-  greeting: string;
-  paragraphs: string[];
-  signoff: string;
+  markdown: string;
 };
 
 export const reports: Report[] = [
   {
     id: 'rp-sales',
-    title: 'Coffee?',
-    author: 'Marisa Lu',
-    date: 'Just Now',
-    greeting: 'Hey Jason,',
-    paragraphs: [
-      "Was wondering if you'd be interested in meeting my team at Philz Coffee at 11 AM today. No pressure if you can't make it, although I think you guys would really get along!",
-    ],
-    signoff: 'Marisa',
+    title: '서울 1인 가구 주거 인프라 분석',
+    author: 'Report Agent',
+    date: '2026.07.19',
+    markdown: `## 이번 실행에서 확인한 결론
+
+SQL Agent가 매물 좌표, 행정동 경계, 생활 인프라 데이터를 하나의 분석 마트로 묶었고, 이후 EDA와 Analysis 단계에서 행정동별 인프라 수준을 점수화했다.
+
+가장 중요한 신호는 시설의 총량이 아니었다. 같은 편의점 수를 가진 지역이라도 1인 가구 인구가 많거나 지하철 접근성이 낮으면 실제 주거 적합도는 빠르게 낮아졌다.
+
+## 추천 판단
+
+- 신림동은 임대료 부담과 강남 접근성의 균형이 좋아 1순위 후보로 남았다.
+- 사당1동은 교통 접근성이 강하지만 생활 편의 점수는 신림동보다 약간 낮았다.
+- 공덕동은 전반적 인프라는 우수했지만 가격 부담 때문에 최종 점수가 눌렸다.
+
+## 리포트 해석
+
+이 결과는 특정 매물을 바로 고르는 모델이라기보다, 매물을 보기 전에 후보 행정동을 줄이는 필터에 가깝다. 실제 추천 단계에서는 보증금, 관리비, 건물 연식이 추가로 반영되어야 한다.`,
   },
   {
     id: 'rp-mart-1',
-    title: 'Feedback',
-    author: 'Lindsey Weiss',
-    date: 'Yesterday',
-    greeting: 'Hey Jason,',
-    paragraphs: [
-      'I took a look at the prototype, really into it so far. I know you are very close to the launch date, but here is something that a potential user would encourage you to think about.',
-      'The hierarchy is clear and the main flow feels focused. A little more room around the summary would make the results easier to scan.',
-      'I would also like to see spaces organized by temporality. If that makes sense, a team should be able to move through recent work without losing the larger project context.',
-      'The report view feels like the right place to preserve that context. It can stay calm while still giving the most important findings enough visual weight.',
-      'Let me know if this is helpful to your process. I can send a few annotated examples before the next review.',
-    ],
-    signoff: 'Lindsey',
+    title: '행정동별 인프라 지수 계산 결과',
+    author: 'Report Agent',
+    date: '2026.07.19',
+    markdown: `## 지수 산출 방식
+
+이번 리포트는 SQL, EDA, Analysis Agent의 산출물을 이어 받아 작성했다. 시설 좌표는 행정동 경계와 매칭했고, 시설 수는 단순 합계가 아니라 인구 대비 밀도와 평균 접근 거리로 다시 변환했다.
+
+| 항목 | 반영 방식 |
+| --- | --- |
+| 생활 편의 | 편의점, 세탁소, 병원 접근성 |
+| 이동 편의 | 지하철역 거리와 환승 가능성 |
+| 안전 | CCTV, 가로등 밀도 |
+| 휴식 | 공원 및 녹지 접근성 |
+
+## 눈에 띈 패턴
+
+상위권 행정동은 대부분 특정 인프라 하나가 압도적으로 높은 곳이 아니라, 생활 편의와 교통 접근성이 함께 높은 곳이었다.
+
+반대로 하위권 지역은 부족 유형이 분명했다. 어떤 지역은 세탁소와 병원 접근성이 낮았고, 어떤 지역은 야간 안전 지표가 낮았다. 그래서 전체 점수만 보는 것보다 부족한 인프라 유형을 함께 보는 편이 더 유용하다.`,
   },
   {
     id: 'rp-mart-2',
-    title: 'Post-grad plans',
-    author: 'Evelyn Ma',
-    date: '3 days ago',
-    greeting: 'Dear Jason,',
-    paragraphs: [
-      "How's everything? Doesn't it seem crazy that you have less than 10 days to go before you graduate?",
-      "I'm sorry that I won't be able to attend your ceremony in person, but I was wondering what your plans are for after graduation.",
-      "Will you be traveling, or are you planning to stay nearby for a while? I'd love to hear what you decide once things settle down.",
-    ],
-    signoff: 'Evelyn',
+    title: '강남 출퇴근 기준 주거지 추천',
+    author: 'Report Agent',
+    date: '2026.07.18',
+    markdown: `## 사용자 조건
+
+페르소나는 강남역 인근으로 출퇴근하는 직장인 1인 가구로 설정했다. 분석에는 인프라 지수, 출퇴근 접근성, 임대료 부담, 안전 지수를 함께 사용했다.
+
+## 최종 후보
+
+1순위는 신림동이다. 강남 접근 시간이 비교적 짧고, 생활 편의시설 밀도가 높으며, 가격 부담이 낮아 총점이 가장 높게 나왔다.
+
+2순위는 사당1동이다. 환승 편의성이 좋아 출퇴근 조건에서 강점을 보였다.
+
+3순위는 공덕동이다. 인프라 자체는 우수하지만 임대료 부담이 커 실거주 추천 점수는 일부 낮아졌다.
+
+## 주의할 점
+
+공덕동처럼 인프라 점수가 높은 지역이 항상 최종 추천 1순위가 되지는 않았다. 이번 모델은 삶의 편의성과 비용 부담 사이의 균형을 더 크게 본다.`,
   },
   {
     id: 'rp-mart-3',
-    title: 'Launch plan',
-    author: 'Dennis Jin',
-    date: '5 days ago',
-    greeting: 'Hey team,',
-    paragraphs: [
-      "You've made some last-minute revisions. I'll update the site to reflect the new work, but it may take a little time to sync.",
-      'The rollout checklist is attached to the project. Everything is ready for a final review.',
-      'Once the content pass is complete, we can publish the updated report and share it with the rest of the team.',
-    ],
-    signoff: 'Dennis',
+    title: '인프라 취약 지역 요약',
+    author: 'Report Agent',
+    date: '2026.07.18',
+    markdown: `## 핵심만 보면
+
+인구 대비 인프라 점수가 낮은 행정동을 취약 지역으로 분류했다. 취약 지역은 하나의 유형으로 묶이지 않았고, 생활 편의 부족형과 안전 인프라 부족형으로 나뉘었다.
+
+## 개선 우선순위
+
+- 세탁소와 병원이 부족한 지역은 생활 편의 보완이 먼저 필요하다.
+- CCTV와 가로등 밀도가 낮은 지역은 야간 안전 개선 대상으로 보는 것이 적절하다.
+- 공원 접근성이 낮은 지역은 주거 만족도보다 휴식 인프라 관점에서 별도 관리가 필요하다.
+
+하위 20% 지역의 생활 편의 접근성을 10% 개선하면 전체 인프라 불균형 지표가 약 6.8% 완화되는 것으로 추정된다.`,
   },
   {
     id: 'rp-growth',
-    title: 'Weekly growth review',
-    author: 'Victoria Wang',
-    date: '8 July',
-    greeting: 'Hi everyone,',
-    paragraphs: [
-      'Acquisition remained steady this week while activation improved across the newest onboarding flow.',
-      'The strongest signal came from teams that connected a second data source during their first session.',
-      'Those teams reached their first saved report faster and returned more frequently during the following week.',
-      'Usage was especially strong among collaborators who reviewed the same report together instead of exporting it immediately.',
-      'We should continue watching whether the new navigation changes improve discovery without increasing the time needed to complete common tasks.',
-      'For the next iteration, the team will compare report creation, return visits, and sharing behavior across each onboarding cohort.',
-      'A detailed breakdown will be included in the monthly review after the remaining event data has been validated.',
-    ],
-    signoff: 'Victoria',
+    title: '배송 지연 손실 리스크 분석',
+    author: 'Report Agent',
+    date: '2026.07.17',
+    markdown: `## 분석 흐름
+
+SQL Agent가 주문 단위 마트를 생성한 뒤, EDA Agent가 배송 지연 분포와 손실액 분포를 확인했다. Analysis 단계에서는 정상 배송 주문의 기대 수익을 기준으로 손실액을 재정의했고, Modeling 단계에서는 주문 시점 변수만 사용해 예측 모델을 학습했다.
+
+## 주요 결과
+
+배송 지연은 모든 주문에서 균등하게 발생하지 않았다. 특정 Market, Shipping Mode, Category 조합에서 반복적으로 높게 나타났고, 고가 주문에서는 지연 발생 시 손실 폭이 더 커졌다.
+
+| 모델 | MAE | RMSE |
+| --- | ---: | ---: |
+| Random Forest | 7.4 | 18.9 |
+| XGBoost | 7.1 | 18.2 |
+
+## 의사결정 포인트
+
+Standard Class 배송과 일부 Market 조합은 누적 예측 손실 기여도가 높았다. 이 구간은 배송 옵션 변경, 우선 출고, 사전 알림 정책을 실험할 만한 후보군이다.`,
   },
   {
     id: 'rp-retention',
-    title: 'Retention notes',
-    author: 'Adil Kalakkad',
-    date: '2 July',
-    greeting: 'Hello,',
-    paragraphs: [
-      'Returning teams are creating more reports per session and spending less time moving between data sources.',
-    ],
-    signoff: 'Adil',
+    title: '손실 예측 모델 점검 메모',
+    author: 'Report Agent',
+    date: '2026.07.17',
+    markdown: `## 모델 상태
+
+주문 시점에 알 수 있는 변수만 사용해 손실액을 예측했다. 학습 데이터와 검증 데이터의 오차 차이가 크지 않아 과적합 신호는 크지 않았다.
+
+주요 기여 변수는 Sales, Shipping Mode, Order Region, Category Name 순으로 확인되었다.
+
+## 다음 확인 사항
+
+Top N 고위험 주문군에 대해 SHAP 기반 변수 기여도를 추가로 확인하고, 배송 정책을 바꿨을 때 예상 손실 절감액이 얼마나 줄어드는지 비교할 필요가 있다.`,
   },
 ];

@@ -137,10 +137,10 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           type: 'playground',
           position: selectedNode
             ? {
-                x: selectedNode.position.x + 336,
-                y: selectedNode.position.y + childCount * 180,
+                x: selectedNode.position.x + 460,
+                y: selectedNode.position.y + childCount * 200,
               }
-            : { x: 280 + column * 336, y: 320 + row * 180 },
+            : { x: 280 + column * 384, y: 320 + row * 200 },
           data: {
             ...NODE_DEFAULTS[kind],
             kind,

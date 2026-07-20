@@ -96,15 +96,20 @@
   height: 2rem;
   width: 3rem;
   border-radius: 999px;
-  border: 1px solid transparent;
-  background:
-    linear-gradient(90deg,
-      #DCF4FF 0%,
-      #62CDFF 50%,
-      #DCF4FF 100%) padding-box,
-    linear-gradient(90deg,
-      #ffffff 0%,
-      #13b4ff 50%,
-      #ffffff 100%) border-box;
+  border: 1px solid rgb(255 255 255 / 18%);
+  background: var(--color-flow-active);
   color: #ffffff;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 20%),
+    0 8px 18px rgb(52 52 52 / 18%);
+}
+
+.sendButton:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-flow-active) 90%, #ffffff);
+}
+
+.sendButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+  box-shadow: none;
 }

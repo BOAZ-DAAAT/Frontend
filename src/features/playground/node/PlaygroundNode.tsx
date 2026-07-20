@@ -56,15 +56,29 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         position={Position.Left}
         isConnectable={false}
         className={styles.edgeAnchor}
-      >
-        {hasActiveTarget ? (
-          <span className={`${styles.handleWave} ${styles.handleWaveLeft}`}>
-            <svg viewBox="0 0 32 18" aria-hidden="true">
-              <path d="M1 17 C8 16.7 12.2 12.5 16 1 C19.8 12.5 24 16.7 31 17 Z" />
-            </svg>
-          </span>
-        ) : null}
-      </Handle>
+      />
+
+      {isFlowActive ? (
+        <svg
+          className={`${styles.borderFlow} ${
+            hasActiveSource ? styles.borderFlowSource : ''
+          } ${hasActiveTarget ? styles.borderFlowTarget : ''}`}
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          <path
+            className={`${styles.borderFlowPath} ${styles.borderFlowTop}`}
+            d="M 0 50 L 0 6 Q 0 0 6 0 L 94 0 Q 100 0 100 6 L 100 50"
+            pathLength={100}
+          />
+          <path
+            className={`${styles.borderFlowPath} ${styles.borderFlowBottom}`}
+            d="M 0 50 L 0 94 Q 0 100 6 100 L 94 100 Q 100 100 100 94 L 100 50"
+            pathLength={100}
+          />
+        </svg>
+      ) : null}
 
       <div className={styles.header}>
         <span className={styles.iconBox}>
@@ -107,15 +121,7 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         position={Position.Right}
         isConnectable={false}
         className={styles.edgeAnchor}
-      >
-        {hasActiveSource ? (
-          <span className={`${styles.handleWave} ${styles.handleWaveRight}`}>
-            <svg viewBox="0 0 32 18" aria-hidden="true">
-              <path d="M1 17 C8 16.7 12.2 12.5 16 1 C19.8 12.5 24 16.7 31 17 Z" />
-            </svg>
-          </span>
-        ) : null}
-      </Handle>
+      />
     </div>
   );
 }

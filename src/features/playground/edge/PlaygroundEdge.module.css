@@ -1,7 +1,7 @@
 .edge {
   fill: none;
-  stroke: rgb(52 52 52 / 15%);
-  stroke-width: 2px;
+  stroke: rgb(72 86 112 / 32%);
+  stroke-width: 2.6px;
   stroke-linecap: round;
   stroke-linejoin: round;
   cursor: pointer;
@@ -9,40 +9,27 @@
 }
 
 .activeInteraction {
-  stroke: transparent;
+  stroke: transparent !important;
   cursor: pointer;
 }
 
-.wave {
+.activeHighlight {
   fill: none;
-  pointer-events: none;
+  stroke: rgb(255 255 255 / 88%);
+  stroke-width: 4px;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-.waveGray {
-  stroke: rgb(255 255 255 / 88%);
-  stroke-width: 0.5px;
   filter:
-    drop-shadow(0 0 2px rgb(255 255 255 / 100%)) drop-shadow(0 0 2px rgb(255 255 255 / 100%));
-}
-
-.waveBlue {
-  stroke: rgb(255 255 255 / 88%);
-  stroke-width: 0.5px;
-  filter:
-    drop-shadow(0 0 2px rgb(255 255 255 / 100%)) drop-shadow(0 0 2px rgb(255 255 255 / 100%));
-}
-
-.waveGraySoft {
-  stroke: rgb(255 255 255 / 88%);
-  stroke-width: 0.5px;
-  filter:
-    drop-shadow(0 0 2px rgb(255 255 255 / 100%)) drop-shadow(0 0 2px rgb(255 255 255 / 100%));
+    drop-shadow(0 0 5px rgb(255 255 255 / 86%))
+    drop-shadow(0 0 14px rgb(255 255 255 / 46%));
+  opacity: 1;
+  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .edge {
+  .edge,
+  .activeHighlight {
     transition: none;
+    animation: none;
   }
 }

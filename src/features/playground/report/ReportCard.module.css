@@ -172,30 +172,80 @@
   letter-spacing: 0;
 }
 
-.greeting {
-  margin: 3rem 0 0;
+.markdown {
+  margin-top: 2rem;
   font-size: var(--text-base);
   line-height: 1.6;
 }
 
-.copy {
-  margin-top: 1.5rem;
+.markdown h3 {
+  margin: 1.75rem 0 0.65rem;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: 0;
+}
+
+.markdown h3:first-child {
+  margin-top: 0;
+}
+
+.markdown h4 {
+  margin: 1.25rem 0 0.5rem;
   font-size: var(--text-base);
-  line-height: 1.6;
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
+  letter-spacing: 0;
 }
 
-.copy p {
-  margin: 0;
+.markdown p {
+  margin: 0.7rem 0 0;
 }
 
-.copy p + p {
-  margin-top: 1rem;
+.markdown ul {
+  margin: 0.65rem 0 0;
+  padding-left: 1.15rem;
 }
 
-.signoff {
-  margin: 1.5rem 0 0;
-  font-size: var(--text-base);
-  line-height: 1.6;
+.markdown li + li {
+  margin-top: 0.35rem;
+}
+
+.markdown strong {
+  font-weight: var(--font-semibold);
+}
+
+.markdown code {
+  padding: 0.08rem 0.25rem;
+  border-radius: 0.25rem;
+  background: rgb(52 52 52 / 8%);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+}
+
+.tableWrap {
+  margin-top: 0.8rem;
+  overflow-x: auto;
+}
+
+.tableWrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.tableWrap th,
+.tableWrap td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid rgb(52 52 52 / 12%);
+  text-align: left;
+  vertical-align: top;
+}
+
+.tableWrap th {
+  background: rgb(52 52 52 / 6%);
+  font-weight: var(--font-semibold);
 }
 
 @keyframes detailReveal {
