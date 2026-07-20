@@ -181,7 +181,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   };
 
   return (
-    <div className={`${styles.canvas} ${isGenerating ? styles.generating : ''}`}>
+    <div className={styles.canvas}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
