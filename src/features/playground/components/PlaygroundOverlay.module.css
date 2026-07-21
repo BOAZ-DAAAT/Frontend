@@ -51,4 +51,13 @@
   padding: 0 1rem;
   transform: translateX(-50%);
   pointer-events: auto;
+  transition:
+    opacity 260ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dockHidden {
+  opacity: 0;
+  transform: translate(-50%, calc(100% + 1.5rem));
+  pointer-events: none;
 }
