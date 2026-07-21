@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { BackendApiError } from '@/lib/apiClient';
 
-import { getAgentRun, listAgentRunEvents } from './api';
+import { getAgentRun, listAgentRunRelatedEvents } from './api';
 import { streamAgentRunEvents } from './eventStream';
 
 const RECONNECT_DELAY_MS = 1500;
@@ -34,26 +34,6 @@ function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
   // review_request가 채워져 있으면 뒤이어 human_input.required가 와서 waiting_input으로 정정된다.
   if (event.event_type === 'agent.waiting') return 'waiting_approval';
   return null;
-}
-
-function metadataString(metadata: Record<string, unknown> | null | undefined, key: string): string | null {
-  const value = metadata?.[key];
-  return typeof value === 'string' && value ? value : null;
-}
-
-async function listAncestorEvents(run: RunSummary, runId: string): Promise<RunEvent[]> {
-  const lineageEvents: RunEvent[][] = [];
-  const seenRunIds = new Set([runId]);
-  let sourceRunId = metadataString(run.metadata, 'branched_from_run_id');
-
-  while (sourceRunId && !seenRunIds.has(sourceRunId)) {
-    seenRunIds.add(sourceRunId);
-    const sourceRun = await getAgentRun(sourceRunId);
-    lineageEvents.unshift(await listAgentRunEvents(sourceRunId));
-    sourceRunId = metadataString(sourceRun.metadata, 'branched_from_run_id');
-  }
-
-  return lineageEvents.flat();
 }
 
 function reconnectDelay(signal: AbortSignal): Promise<void> {
@@ -91,7 +71,7 @@ export function useAgentRunStream(
       try {
         const run = await getAgentRun(runId);
         if (controller.signal.aborted) return;
-        const sourceEvents = await listAncestorEvents(run, runId);
+        const sourceEvents = await listAgentRunRelatedEvents(runId);
         if (controller.signal.aborted) return;
         setState({ run, events: sourceEvents, isStreaming: true, error: null });
 

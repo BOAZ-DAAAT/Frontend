@@ -7,13 +7,14 @@ import {
   type Node,
   type NodeChange,
 } from '@xyflow/react';
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
 import {
   branchAgentRun,
   createAgentRun,
+  deleteAgentRun,
   resumeAgentRun,
   resumeAgentRunApproval,
   type BranchStage,
@@ -170,6 +171,16 @@ function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | nul
   return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
 }
 
+function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
+  const byId = new Map(previous.map((event) => [event.event_id, event]));
+  for (const event of next) {
+    byId.set(event.event_id, event);
+  }
+  return [...byId.values()].sort((left, right) => (
+    (left.created_at ?? '').localeCompare(right.created_at ?? '')
+  ));
+}
+
 export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
   const initialGraph = useMemo(
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
@@ -193,6 +204,44 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
+  const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
+
+  const handleDeleteRunStable = useCallback(async (runId: string, label: string) => {
+    const shouldDelete = window.confirm(
+      `${label} 노드가 속한 분기 run 전체를 삭제할까요?\n\nrun_id: ${runId}`,
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await deleteAgentRun(runId);
+      const fallbackRunId = visibleEvents.find((event) => event.run_id !== runId)?.run_id ?? null;
+      setVisibleEvents((currentEvents) => currentEvents.filter((event) => event.run_id !== runId));
+      setSelectedNodeSummary((selected) => (
+        selected?.runId === runId ? null : selected
+      ));
+
+      if (activeRunId === runId) {
+        setActiveRunId(fallbackRunId);
+        if (fallbackRunId) {
+          setStoredActiveRunId(fallbackRunId);
+        } else {
+          clearStoredActiveRunId();
+        }
+      }
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : error instanceof Error
+          ? error.message
+        : 'run을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.';
+      window.alert(message);
+      throw error;
+    }
+  }, [activeRunId, visibleEvents]);
+
+  useEffect(() => {
+    setVisibleEvents((currentEvents) => mergeRunEvents(currentEvents, events));
+  }, [events]);
 
   useEffect(() => {
     // 새로고침으로 복원한 run_id가 더 이상 존재하지 않으면(삭제됨 등) 저장값을 비운다.
@@ -207,8 +256,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
   );
   const isGenerating = isStartingRun || isRunActive;
-  const clarification = useMemo(() => getClarification(run, events), [events, run]);
-  const approval = useMemo(() => getApproval(run, events), [events, run]);
+  const clarification = useMemo(() => getClarification(run, visibleEvents), [visibleEvents, run]);
+  const approval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
 
   const handleNodesChange = (changes: NodeChange<Node<PlaygroundNodeData>>[]) => {
     setNodes((currentNodes) => {
@@ -275,13 +324,14 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   }, [approval?.eventId]);
 
   useEffect(() => {
-    const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
+    const nextGraph = deriveNodeGraphFromEvents(visibleEvents, playgroundNodes, playgroundEdges);
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
 
       const eventNodes = nextGraph.nodes.map((node) => {
         const offset = node.data.runId ? laneOffsetByRunId.current.get(node.data.runId) : undefined;
-        if (!offset || (!offset.x && !offset.y)) return node;
+        const data = { ...node.data, onDeleteRun: handleDeleteRunStable };
+        if (!offset || (!offset.x && !offset.y)) return { ...node, data };
         return {
           ...node,
           position: {
@@ -289,6 +339,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
             x: node.position.x + offset.x,
             y: node.position.y + offset.y,
           },
+          data,
         };
       });
 
@@ -332,7 +383,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           hydratedSummaryNodes.current.delete(hydrationKey);
         });
     }
-  }, [activeRunId, events, setEdges, setNodes]);
+  }, [activeRunId, handleDeleteRunStable, visibleEvents, setEdges, setNodes]);
 
   useEffect(() => {
     setSelectedNodeSummary((selected) => {
@@ -396,6 +447,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     setIsStartingRun(true);
     setActiveRunId(null);
     setSelectedNodeSummary(null);
+    setVisibleEvents([]);
 
     try {
       const run = await createAgentRun(sessionId, prompt);

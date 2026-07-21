@@ -38,8 +38,20 @@ export function getAgentRun(runId: string) {
   return apiClient.get<RunSummary>(`/agent-runs/${encodeURIComponent(runId)}`);
 }
 
+export function deleteAgentRun(runId: string) {
+  return apiClient.delete<{
+    run_id: string;
+    deleted_event_count: number;
+    deleted_artifact_count: number;
+  }>(`/agent-runs/${encodeURIComponent(runId)}`);
+}
+
 export function listAgentRunEvents(runId: string) {
   return apiClient.get<RunEvent[]>(`/agent-runs/${encodeURIComponent(runId)}/events`);
+}
+
+export function listAgentRunRelatedEvents(runId: string) {
+  return apiClient.get<RunEvent[]>(`/agent-runs/${encodeURIComponent(runId)}/related-events`);
 }
 
 export function resumeAgentRun(runId: string, answer: string) {

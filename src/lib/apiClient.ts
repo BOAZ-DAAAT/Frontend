@@ -87,6 +87,10 @@ export const apiClient = {
     return request<T>(path, { ...options, method: 'POST', body });
   },
 
+  delete<T>(path: string, options?: ApiClientOptions) {
+    return request<T>(path, { ...options, method: 'DELETE' });
+  },
+
   async blob(path: string, options?: ApiClientOptions) {
     const response = await fetchResponse(path, { ...options, method: 'GET' });
     return response.blob();

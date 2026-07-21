@@ -154,9 +154,43 @@
 }
 
 .title {
+  min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--text-base);
   font-weight: var(--font-semibold);
   color: var(--color-brand-primary);
+}
+
+.deleteButton {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(60 60 60 / 8%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 34%);
+  color: color-mix(in srgb, var(--color-brand-primary) 52%, transparent);
+  cursor: pointer;
+  opacity: 0.52;
+  transition:
+    opacity 160ms ease,
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.deleteButton:hover {
+  background: rgb(255 255 255 / 74%);
+  color: var(--color-brand-primary);
+  opacity: 1;
+  transform: scale(1.04);
+}
+
+.deleteIcon {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 
 .description {
