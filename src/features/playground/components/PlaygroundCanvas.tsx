@@ -1,4 +1,4 @@
-import { ReactFlow, useEdgesState, useNodesState, type Edge } from '@xyflow/react';
+import { ReactFlow, useEdgesState, useNodesState, type Edge, type Node } from '@xyflow/react';
 import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import '@xyflow/react/dist/style.css';
@@ -9,6 +9,8 @@ import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
 import type { CreatableNodeKind } from '@/features/playground/node-editor';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
+import { getAgentNodeSummary } from '@/features/playground/node-summary/api';
+import type { NodeSummary } from '@/features/playground/node-summary/types';
 import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import type { PlaygroundNodeData } from '@/features/playground/types';
@@ -51,6 +53,19 @@ type Clarification = {
   eventId: string | null;
   agentName: string;
   question: string;
+};
+
+type SelectedNodeSummary = {
+  id: string;
+  label: string;
+  kind: PlaygroundNodeData['kind'];
+  status: PlaygroundNodeData['status'];
+};
+
+type NodeSummaryRequest = {
+  data: NodeSummary | null;
+  error: string | null;
+  isLoading: boolean;
 };
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
@@ -107,6 +122,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   );
   const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+  const [selectedNodeSummary, setSelectedNodeSummary] = useState<SelectedNodeSummary | null>(null);
+  const [nodeSummaryRequest, setNodeSummaryRequest] = useState<NodeSummaryRequest>({
+    data: null,
+    error: null,
+    isLoading: false,
+  });
 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
@@ -159,6 +180,50 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     });
   }, [events, setEdges, setNodes]);
 
+  useEffect(() => {
+    setSelectedNodeSummary((selected) => {
+      if (!selected) return null;
+      const currentNode = nodes.find((node) => node.id === selected.id);
+      if (!currentNode || currentNode.data.status === selected.status) return selected;
+      return {
+        ...selected,
+        label: currentNode.data.label,
+        kind: currentNode.data.kind,
+        status: currentNode.data.status,
+      };
+    });
+  }, [nodes]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!selectedNodeSummary) {
+      setNodeSummaryRequest({ data: null, error: null, isLoading: false });
+      return () => { cancelled = true; };
+    }
+    if (!activeRunId || selectedNodeSummary.status !== 'success') {
+      setNodeSummaryRequest({ data: null, error: null, isLoading: false });
+      return () => { cancelled = true; };
+    }
+
+    setNodeSummaryRequest({ data: null, error: null, isLoading: true });
+    getAgentNodeSummary(activeRunId, selectedNodeSummary.id)
+      .then((response) => {
+        if (!cancelled) {
+          setNodeSummaryRequest({ data: response.summary, error: null, isLoading: false });
+        }
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        const message = error instanceof BackendApiError
+          ? error.message
+          : '노드 서머리를 불러오지 못했습니다.';
+        setNodeSummaryRequest({ data: null, error: message, isLoading: false });
+      });
+
+    return () => { cancelled = true; };
+  }, [activeRunId, selectedNodeSummary]);
+
   const handlePromptSend = async (prompt: string) => {
     if (isGenerating) return;
 
@@ -170,6 +235,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
     setIsStartingRun(true);
     setActiveRunId(null);
+    setSelectedNodeSummary(null);
 
     try {
       const run = await createAgentRun(sessionId, prompt);
@@ -260,6 +326,24 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }));
   };
 
+  const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
+    setSelectedNodeSummary({
+      id: node.id,
+      label: node.data.label,
+      kind: node.data.kind,
+      status: node.data.status,
+    });
+  };
+
+  const handleBranchPromptSend = async (_prompt: string) => {
+    // 노드 분기 실행 API는 서머리 데이터 계약이 정해진 뒤 연결한다.
+  };
+
+  const handlePaneClick = () => {
+    setSelectedNodeSummary(null);
+    collapse();
+  };
+
   return (
     <div className={styles.canvas}>
       <ReactFlow
@@ -269,8 +353,9 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
+        onNodeClick={handleNodeClick}
         onEdgeClick={handleEdgeClick}
-        onPaneClick={collapse}
+        onPaneClick={handlePaneClick}
         selectNodesOnDrag={false}
         fitView
       >
@@ -283,6 +368,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         isSubmittingClarification={isSubmittingClarification}
         clarificationError={clarificationError}
         onClarificationSend={handleClarificationSend}
+        nodeSummary={selectedNodeSummary}
+        nodeSummaryData={nodeSummaryRequest.data}
+        nodeSummaryError={nodeSummaryRequest.error}
+        isNodeSummaryLoading={nodeSummaryRequest.isLoading}
+        onCloseNodeSummary={() => setSelectedNodeSummary(null)}
+        onBranchPromptSend={handleBranchPromptSend}
         preview={preview}
         onClosePreview={onClosePreview}
         onCreateNode={handleCreateNode}

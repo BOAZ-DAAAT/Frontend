@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileText, X, type LucideIcon } from 'lucide-react';
 
 import type { Report } from './reportData';
 import styles from './ReportCard.module.css';
@@ -19,6 +19,10 @@ type ReportCardProps = {
   motionKey?: string;
   motionOrder?: number;
   transitionName?: string;
+  documentContent?: ReactNode;
+  className?: string;
+  headerIcon?: LucideIcon;
+  pathRoot?: string | null;
 };
 
 const REPORT_WIDTH = 640;
@@ -186,6 +190,10 @@ export function ReportCard({
   motionKey,
   motionOrder,
   transitionName,
+  documentContent,
+  className,
+  headerIcon: HeaderIcon = FileText,
+  pathRoot = 'Report',
 }: ReportCardProps) {
   const thumbnailRef = useRef<HTMLDivElement>(null);
   const thumbnailDocumentRef = useRef<HTMLElement>(null);
@@ -230,9 +238,13 @@ export function ReportCard({
     <>
       <header className={styles.header}>
         <div className={styles.path}>
-          <FileText className={styles.reportIcon} aria-hidden="true" />
-          <span className={styles.pathRoot}>Report</span>
-          <span className={styles.separator}>/</span>
+          <HeaderIcon className={styles.reportIcon} aria-hidden="true" />
+          {pathRoot ? (
+            <>
+              <span className={styles.pathRoot}>{pathRoot}</span>
+              <span className={styles.separator}>/</span>
+            </>
+          ) : null}
           <span className={styles.pathTitle}>{report.title}</span>
         </div>
 
@@ -253,7 +265,7 @@ export function ReportCard({
       </header>
 
       <div className={styles.surface}>
-        <ReportContent report={report} />
+        {documentContent === undefined ? <ReportContent report={report} /> : documentContent}
       </div>
     </>
   );
@@ -293,7 +305,7 @@ export function ReportCard({
 
   return (
     <article
-      className={`${styles.card} ${styles.detail}`}
+      className={`${styles.card} ${styles.detail} ${className ?? ''}`}
       style={{ viewTransitionName: transitionName } as CSSProperties}
       onClick={(event) => event.stopPropagation()}
     >
