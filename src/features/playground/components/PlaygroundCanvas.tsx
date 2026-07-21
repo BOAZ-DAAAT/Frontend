@@ -1,9 +1,14 @@
 import { ReactFlow, useEdgesState, useNodesState, type Edge, type Node } from '@xyflow/react';
-import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
-import { createAgentRun, resumeAgentRun } from '@/features/agent-runs/api';
+import { createAgentRun, resumeAgentRun, resumeAgentRunApproval } from '@/features/agent-runs/api';
+import {
+  clearStoredActiveRunId,
+  getStoredActiveRunId,
+  setStoredActiveRunId,
+} from '@/features/agent-runs/activeRunStorage';
 import { useAgentRunStream } from '@/features/agent-runs/hooks';
 import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
@@ -53,6 +58,12 @@ type Clarification = {
   eventId: string | null;
   agentName: string;
   question: string;
+};
+
+type Approval = {
+  eventId: string | null;
+  agentName: string;
+  reason: string;
 };
 
 type SelectedNodeSummary = {
@@ -115,6 +126,23 @@ function getClarification(run: RunSummary | null, events: RunEvent[]): Clarifica
   return { eventId: waitingEvent?.event_id ?? null, agentName, question };
 }
 
+function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | null {
+  if (run?.status !== 'waiting_approval') return null;
+
+  let waitingEvent: RunEvent | null = null;
+  for (const event of events) {
+    if (event.event_type === 'agent.waiting') waitingEvent = event;
+    if (event.event_type === 'human_input.resumed') waitingEvent = null;
+  }
+
+  const reason = waitingEvent?.message
+    ?? metadataString(run.metadata, 'reason')
+    ?? '결과를 승인해 주세요.';
+  const rawAgentName = waitingEvent?.node_name ?? 'analysis_agent';
+
+  return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
+}
+
 export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
   const initialGraph = useMemo(
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
@@ -128,12 +156,23 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     error: null,
     isLoading: false,
   });
+  const hydratedSummaryNodes = useRef(new Set<string>());
 
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
   const [isStartingRun, setIsStartingRun] = useState(false);
   const [isSubmittingClarification, setIsSubmittingClarification] = useState(false);
   const [clarificationError, setClarificationError] = useState<string | null>(null);
-  const { run, events } = useAgentRunStream(activeRunId);
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
+
+  useEffect(() => {
+    // 새로고침으로 복원한 run_id가 더 이상 존재하지 않으면(삭제됨 등) 저장값을 비운다.
+    if (runStreamError && !run) {
+      clearStoredActiveRunId();
+      setActiveRunId(null);
+    }
+  }, [runStreamError, run]);
 
   const { collapse } = useSidebar();
   const isRunActive = Boolean(
@@ -141,11 +180,17 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   );
   const isGenerating = isStartingRun || isRunActive;
   const clarification = useMemo(() => getClarification(run, events), [events, run]);
+  const approval = useMemo(() => getApproval(run, events), [events, run]);
 
   useEffect(() => {
     setIsSubmittingClarification(false);
     setClarificationError(null);
   }, [clarification?.eventId]);
+
+  useEffect(() => {
+    setIsSubmittingApproval(false);
+    setApprovalError(null);
+  }, [approval?.eventId]);
 
   useEffect(() => {
     const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
@@ -178,7 +223,30 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
       return [...eventEdges, ...manualEdges];
     });
-  }, [events, setEdges, setNodes]);
+
+    if (activeRunId) {
+      for (const node of nextGraph.nodes) {
+        if (node.data.status !== 'success') continue;
+        const hydrationKey = `${activeRunId}:${node.id}`;
+        if (hydratedSummaryNodes.current.has(hydrationKey)) continue;
+        hydratedSummaryNodes.current.add(hydrationKey);
+        void getAgentNodeSummary(activeRunId, node.id)
+          .then((response) => {
+            setNodes((currentNodes) => currentNodes.map((currentNode) => (
+              currentNode.id === node.id
+                ? {
+                    ...currentNode,
+                    data: { ...currentNode.data, description: response.summary.key_finding },
+                  }
+                : currentNode
+            )));
+          })
+          .catch(() => {
+            hydratedSummaryNodes.current.delete(hydrationKey);
+          });
+      }
+    }
+  }, [activeRunId, events, setEdges, setNodes]);
 
   useEffect(() => {
     setSelectedNodeSummary((selected) => {
@@ -211,6 +279,11 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       .then((response) => {
         if (!cancelled) {
           setNodeSummaryRequest({ data: response.summary, error: null, isLoading: false });
+          setNodes((currentNodes) => currentNodes.map((node) => (
+            node.id === selectedNodeSummary.id
+              ? { ...node, data: { ...node.data, description: response.summary.key_finding } }
+              : node
+          )));
         }
       })
       .catch((error: unknown) => {
@@ -240,6 +313,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     try {
       const run = await createAgentRun(sessionId, prompt);
       setActiveRunId(run.run_id);
+      setStoredActiveRunId(run.run_id);
     } catch (error) {
       console.error('Agent run failed:', error);
     } finally {
@@ -260,6 +334,23 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         : '답변을 전송하지 못했습니다. 다시 시도해 주세요.';
       setClarificationError(message);
       setIsSubmittingClarification(false);
+      throw error;
+    }
+  };
+
+  const handleApprovalDecision = async (approved: boolean) => {
+    if (!activeRunId || !approval || isSubmittingApproval) return;
+
+    setIsSubmittingApproval(true);
+    setApprovalError(null);
+    try {
+      await resumeAgentRunApproval(activeRunId, approved);
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '승인 처리를 전송하지 못했습니다. 다시 시도해 주세요.';
+      setApprovalError(message);
+      setIsSubmittingApproval(false);
       throw error;
     }
   };
@@ -368,8 +459,13 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         isSubmittingClarification={isSubmittingClarification}
         clarificationError={clarificationError}
         onClarificationSend={handleClarificationSend}
+        approval={approval}
+        isSubmittingApproval={isSubmittingApproval}
+        approvalError={approvalError}
+        onApprovalDecision={handleApprovalDecision}
         nodeSummary={selectedNodeSummary}
         nodeSummaryData={nodeSummaryRequest.data}
+        nodeSummaryRunId={activeRunId}
         nodeSummaryError={nodeSummaryRequest.error}
         isNodeSummaryLoading={nodeSummaryRequest.isLoading}
         onCloseNodeSummary={() => setSelectedNodeSummary(null)}

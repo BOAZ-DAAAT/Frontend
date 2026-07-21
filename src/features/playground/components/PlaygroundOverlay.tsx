@@ -23,6 +23,14 @@ interface PlaygroundOverlayProps {
   isSubmittingClarification: boolean;
   clarificationError: string | null;
   onClarificationSend: (answer: string) => Promise<void>;
+  approval: {
+    eventId: string | null;
+    agentName: string;
+    reason: string;
+  } | null;
+  isSubmittingApproval: boolean;
+  approvalError: string | null;
+  onApprovalDecision: (approved: boolean) => Promise<void>;
   nodeSummary: {
     id: string;
     label: string;
@@ -30,6 +38,7 @@ interface PlaygroundOverlayProps {
     status: 'idle' | 'running' | 'waiting' | 'success' | 'error';
   } | null;
   nodeSummaryData: NodeSummary | null;
+  nodeSummaryRunId: string | null;
   nodeSummaryError: string | null;
   isNodeSummaryLoading: boolean;
   onCloseNodeSummary: () => void;
@@ -46,8 +55,13 @@ export function PlaygroundOverlay({
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
+  approval,
+  isSubmittingApproval,
+  approvalError,
+  onApprovalDecision,
   nodeSummary,
   nodeSummaryData,
+  nodeSummaryRunId,
   nodeSummaryError,
   isNodeSummaryLoading,
   onCloseNodeSummary,
@@ -90,6 +104,7 @@ export function PlaygroundOverlay({
         <NodeSummaryPanel
           node={nodeSummary}
           summary={nodeSummaryData}
+          runId={nodeSummaryRunId}
           error={nodeSummaryError}
           isLoading={isNodeSummaryLoading}
           onClose={onCloseNodeSummary}
@@ -111,6 +126,10 @@ export function PlaygroundOverlay({
           isSubmittingClarification={isSubmittingClarification}
           clarificationError={clarificationError}
           onClarificationSend={onClarificationSend}
+          approval={approval}
+          isSubmittingApproval={isSubmittingApproval}
+          approvalError={approvalError}
+          onApprovalDecision={onApprovalDecision}
         />
       </div>
     </div>

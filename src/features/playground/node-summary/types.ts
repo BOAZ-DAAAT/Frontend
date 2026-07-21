@@ -1,5 +1,6 @@
 export type NodeSummaryFinding = {
   heading: string;
+  rationale?: string;
   body: string;
   source_label?: string | null;
   chart_artifact_ids?: string[];

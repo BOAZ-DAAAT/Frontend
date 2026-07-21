@@ -156,6 +156,46 @@
   line-height: 1.35;
 }
 
+/* TODO(design): 임시 스타일 — 승인/거부 버튼 최종 디자인은 팀원이 다듬을 예정 */
+.approvalActions {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.approvalButton {
+  flex: 1;
+  height: 2rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+}
+
+.approvalButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.approvalButtonApprove {
+  background: var(--color-flow-active);
+  color: #ffffff;
+}
+
+.approvalButtonApprove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-flow-active) 90%, #ffffff);
+}
+
+.approvalButtonReject {
+  background: transparent;
+  color: var(--color-brand-primary);
+}
+
+.approvalButtonReject:hover:not(:disabled) {
+  background: var(--color-hover);
+}
+
 .actions {
   margin-top: 0.5rem;
   display: flex;

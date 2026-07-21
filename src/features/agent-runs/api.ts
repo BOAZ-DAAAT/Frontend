@@ -14,7 +14,7 @@ export type AgentRunResumeResponse = {
   run_id: string;
   thread_id: string;
   status: 'running';
-  resume_type: 'clarification';
+  resume_type: 'clarification' | 'analysis_review' | 'approval';
 };
 
 export function createAgentRun(sessionId: string, query: string) {
@@ -34,6 +34,17 @@ export function resumeAgentRun(runId: string, answer: string) {
     {
       type: 'clarification',
       answer,
+    },
+  );
+}
+
+export function resumeAgentRunApproval(runId: string, approved: boolean, reason?: string) {
+  return apiClient.post<AgentRunResumeResponse>(
+    `/agent-runs/${encodeURIComponent(runId)}/resume`,
+    {
+      type: 'approval',
+      approved,
+      ...(reason ? { reason } : {}),
     },
   );
 }
