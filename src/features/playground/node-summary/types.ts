@@ -1,8 +1,20 @@
 export type NodeSummaryFinding = {
   heading: string;
+  rationale?: string;
   body: string;
   source_label?: string | null;
   chart_artifact_ids?: string[];
+};
+
+export type NodeSummaryAnalysisItem = {
+  title: string;
+  method?: string;
+  purpose?: string;
+  result?: string;
+  key_numbers?: string[];
+  interpretation?: string;
+  caution?: string;
+  decision?: string;
 };
 
 export type NodeSummaryDetail = {

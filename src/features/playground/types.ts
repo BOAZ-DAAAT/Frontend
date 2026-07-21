@@ -24,4 +24,6 @@ export type PlaygroundNodeData = {
     eventType?: string;
     lastMessage?: string;
     lastEventAt?: string;
+    runId?: string;
+    onDeleteRun?: (runId: string, label: string) => void;
 };

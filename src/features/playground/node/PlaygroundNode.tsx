@@ -12,6 +12,7 @@ import {
   Lightbulb,
   ScanSearch,
   SquareTerminal,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -42,6 +43,7 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
   const hasActiveTarget = targetConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
   const hasActiveSource = sourceConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
   const isFlowActive = hasActiveTarget || hasActiveSource;
+  const canDeleteRun = Boolean(data.runId && data.onDeleteRun);
 
   return (
     <div
@@ -89,6 +91,19 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
           label="노드 제목"
           className={styles.title}
         />
+        {canDeleteRun ? (
+          <button
+            type="button"
+            className={styles.deleteButton}
+            aria-label={`${data.label} run 삭제`}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (data.runId) data.onDeleteRun?.(data.runId, data.label);
+            }}
+          >
+            <X className={styles.deleteIcon} />
+          </button>
+        ) : null}
       </div>
 
       <div className={styles.body}>

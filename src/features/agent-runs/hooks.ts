@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { BackendApiError } from '@/lib/apiClient';
 
-import { getAgentRun } from './api';
+import { getAgentRun, listAgentRunRelatedEvents } from './api';
 import { streamAgentRunEvents } from './eventStream';
 
 const RECONNECT_DELAY_MS = 1500;
@@ -30,6 +30,9 @@ function appendEvent(events: RunEvent[], nextEvent: RunEvent): RunEvent[] {
 function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
   if (event.event_type === 'human_input.required') return 'waiting_input';
   if (event.event_type === 'human_input.resumed') return 'running';
+  // analysis_agent가 human_review를 걸면 agent.waiting으로 승인 대기 상태가 됨(interrupt 아님).
+  // review_request가 채워져 있으면 뒤이어 human_input.required가 와서 waiting_input으로 정정된다.
+  if (event.event_type === 'agent.waiting') return 'waiting_approval';
   return null;
 }
 
@@ -68,7 +71,9 @@ export function useAgentRunStream(
       try {
         const run = await getAgentRun(runId);
         if (controller.signal.aborted) return;
-        setState({ run, events: [], isStreaming: true, error: null });
+        const sourceEvents = await listAgentRunRelatedEvents(runId);
+        if (controller.signal.aborted) return;
+        setState({ run, events: sourceEvents, isStreaming: true, error: null });
 
         while (!controller.signal.aborted) {
           try {

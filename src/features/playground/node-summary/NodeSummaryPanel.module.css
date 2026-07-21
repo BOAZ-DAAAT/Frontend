@@ -70,6 +70,81 @@
   border-bottom: 0;
 }
 
+.sqlDocument section {
+  border-bottom: 0;
+}
+
+.sqlSection {
+  border-top: 1px solid rgb(52 52 52 / 10%);
+}
+
+.sqlSection:first-of-type {
+  border-top: 0;
+}
+
+.sectionBody {
+  color: #4d4d4d;
+  font-size: var(--text-sm);
+}
+
+.codeDetails {
+  padding: 1.5rem 0;
+  border-top: 1px solid rgb(52 52 52 / 10%);
+  border-bottom: 0;
+}
+
+.codeDetails summary {
+  cursor: pointer;
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0;
+}
+
+.codeDetails summary::marker {
+  color: #777;
+}
+
+.document .codeDetails pre {
+  margin-top: 0.85rem;
+  border: 1px solid rgb(52 52 52 / 5%);
+  background: rgb(255 255 255 / 62%);
+  color: #4b4b4b;
+}
+
+.document .codeDetails pre code {
+  background: transparent;
+  color: inherit;
+}
+
+.document .sqlCodeBlock {
+  border: 1px solid rgb(52 52 52 / 7%);
+  background: #fbfbfb;
+  color: #3f3f3f;
+}
+
+.document .sqlCodeBlock code {
+  background: transparent;
+  color: inherit;
+}
+
+.sqlKeyword {
+  color: #2f5f9f;
+  font-weight: var(--font-semibold);
+}
+
+.sqlString {
+  color: #8a5a12;
+}
+
+.sqlNumber {
+  color: #6f4dbf;
+}
+
+.sqlComment {
+  color: #858585;
+  font-style: italic;
+}
+
 .document h3 {
   margin: 0 0 0.65rem;
   font-size: var(--text-lg);
@@ -85,6 +160,12 @@
 .document ul {
   margin: 0;
   padding-left: 1.2rem;
+}
+
+.compactList {
+  color: #4d4d4d;
+  font-size: var(--text-sm);
+  line-height: 1.65;
 }
 
 .document li + li {
@@ -113,6 +194,457 @@
 
 .finding p {
   margin-top: 0.25rem;
+}
+
+.sectionNote {
+  margin-bottom: 0.45rem;
+  color: #777;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+}
+
+.chipList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.9rem;
+}
+
+.codeChip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  border: 1px solid rgb(52 52 52 / 9%);
+  border-radius: 0.35rem;
+  background: rgb(52 52 52 / 7%);
+  color: #3d3d3d;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.86em;
+  font-weight: var(--font-medium);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  padding: 0.12rem 0.38rem;
+}
+
+.sqlPreviewTable {
+  max-height: 12.25rem;
+  margin-bottom: 0.95rem;
+  overflow: auto;
+  border: 1px solid rgb(52 52 52 / 10%);
+  border-radius: 0.45rem;
+}
+
+.sqlPreviewTable table {
+  min-width: max-content;
+}
+
+.sqlPreviewTable thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tableWrap.sqlPreviewTable th {
+  background: #f4f4f4;
+}
+
+.sqlMetaDetails {
+  padding: 0.45rem 0;
+  border-top: 0;
+}
+
+.sqlMetaDetails summary {
+  cursor: pointer;
+  color: #555;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.sqlMetaDetails summary::marker {
+  color: #777;
+}
+
+.sqlMetaDetails .chipList {
+  margin: 0.65rem 0 0.2rem;
+}
+
+.sqlSourceGrid {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: 1.2rem;
+}
+
+.sqlSourceGrid h4 {
+  margin: 0 0 0.5rem;
+  color: #555;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0;
+}
+
+.derivedList {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.derivedItem {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid rgb(52 52 52 / 7%);
+  border-radius: 0.5rem;
+  background: rgb(52 52 52 / 4%);
+}
+
+.derivedItem h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: #3f3f3f;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0;
+}
+
+.derivedItem h4::before {
+  width: 0.35rem;
+  height: 0.35rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #555;
+  content: '';
+}
+
+.derivedItem p {
+  color: #555;
+  font-size: var(--text-sm);
+}
+
+.profileList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.profileList li {
+  padding-left: 0.25rem;
+}
+
+.findingStack {
+  display: grid;
+  gap: 1rem;
+}
+
+.edaFinding {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 0;
+}
+
+.edaFinding + .edaFinding {
+  border-top: 1px solid rgb(52 52 52 / 8%);
+}
+
+.edaFinding h4,
+.hypothesisItem h4 {
+  margin: 0;
+  color: #3f3f3f;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0;
+}
+
+.findingRationale {
+  color: #6a6a6a;
+  font-size: var(--text-sm);
+}
+
+.chartGrid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.chartImage {
+  width: 100%;
+  max-height: 22rem;
+  object-fit: contain;
+  border: 1px solid rgb(52 52 52 / 8%);
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.chartFallback {
+  padding: 0.85rem 1rem;
+  border: 1px dashed rgb(52 52 52 / 16%);
+  border-radius: 0.55rem;
+  background: rgb(255 255 255 / 58%);
+  color: #777;
+  font-size: var(--text-xs);
+}
+
+.hypothesisList {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.hypothesisItem {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid rgb(52 52 52 / 7%);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 58%);
+}
+
+.hypothesisItem p {
+  color: #626262;
+  font-size: var(--text-sm);
+}
+
+.analysisDocument section {
+  border-bottom: 0;
+}
+
+.analysisMethodList,
+.analysisHypothesisList,
+.analysisStatList,
+.analysisResultList {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.analysisMethodStep {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.2rem 0;
+}
+
+.analysisMethodStep h4,
+.analysisHypothesisCard h4,
+.analysisStatItem h4 {
+  margin: 0;
+  color: #3f3f3f;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0;
+}
+
+.analysisMethodStep p,
+.analysisHypothesisCard p,
+.analysisStatItem p,
+.analysisResultItem p {
+  color: #555;
+  font-size: var(--text-sm);
+}
+
+.analysisMethodBullets {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.15rem 0 0;
+  padding-left: 1.1rem;
+  color: #555;
+  font-size: var(--text-sm);
+}
+
+.analysisHypothesisCard {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border: 1px solid rgb(52 52 52 / 8%);
+  border-radius: 0.65rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 74%), rgb(255 255 255 / 42%)),
+    rgb(255 255 255 / 62%);
+}
+
+.hypothesisReason {
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid rgb(52 52 52 / 18%);
+  border-radius: 0.45rem;
+  background: rgb(52 52 52 / 4%);
+  color: #666;
+}
+
+.analysisEvidenceList {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+}
+
+.analysisEvidenceList > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.analysisEvidenceList dt {
+  color: #777;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.analysisEvidenceList dd {
+  margin: 0;
+  color: #555;
+  font-size: var(--text-sm);
+}
+
+.analysisEvidenceList dd p + p {
+  margin-top: 0.2rem;
+}
+
+.analysisNumberChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.analysisNumberChips span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid rgb(52 52 52 / 8%);
+  border-radius: 999px;
+  background: rgb(52 52 52 / 6%);
+  color: #3f3f3f;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  line-height: 1.35;
+  padding: 0.22rem 0.55rem;
+}
+
+.analysisStatItem {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem 0;
+}
+
+.analysisStatItem + .analysisStatItem {
+  border-top: 1px solid rgb(52 52 52 / 8%);
+}
+
+.analysisResultItem {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.analysisResultItem > span {
+  display: inline-flex;
+  width: 1.65rem;
+  height: 1.65rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(52 52 52 / 8%);
+  color: #4f4f4f;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.analysisChartDetails {
+  padding: 1rem 0 0;
+  border-top: 1px solid rgb(52 52 52 / 10%);
+}
+
+.analysisEvidenceDetails {
+  padding: 1rem 0;
+  border-top: 1px solid rgb(52 52 52 / 10%);
+}
+
+.analysisEvidenceDetails summary,
+.analysisChartDetails summary {
+  cursor: pointer;
+  color: #555;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.analysisEvidenceStack {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.75rem;
+}
+
+.analysisEvidenceTable {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.analysisEvidenceTable h4 {
+  margin: 0;
+  color: #555;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.analysisChartStack {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 0.8rem;
+}
+
+.analysisChartCard {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.9rem;
+  border: 1px solid rgb(52 52 52 / 7%);
+  border-radius: 0.6rem;
+  background: rgb(255 255 255 / 52%);
+}
+
+.analysisChartHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.analysisChartHeader > span {
+  display: inline-flex;
+  width: 1.45rem;
+  height: 1.45rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(52 52 52 / 8%);
+  color: #555;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.analysisChartHeader h4 {
+  margin: 0;
+  color: #3f3f3f;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+}
+
+.analysisChartCard p {
+  color: #555;
+  font-size: var(--text-sm);
+}
+
+.analysisChartCaution {
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.45rem;
+  background: rgb(52 52 52 / 4%);
+  color: #666;
+}
+
+.cautionSection {
+  color: #666;
+  font-size: var(--text-sm);
+}
+
+.cautionSection h3 {
+  color: #555;
+  font-size: var(--text-base);
+}
+
+.finalQuerySection {
+  padding-bottom: 0;
 }
 
 .objectList {
@@ -156,7 +688,7 @@
 }
 
 .conclusion p {
-  font-weight: var(--font-medium);
+  font-weight: 400;
 }
 
 .state {
