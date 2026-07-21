@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from
 
 import '@xyflow/react/dist/style.css';
 
-import { createAgentRun } from '@/features/agent-runs/api';
+import { createAgentRun, resumeAgentRun } from '@/features/agent-runs/api';
 import { useAgentRunStream } from '@/features/agent-runs/hooks';
 import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
@@ -12,7 +12,9 @@ import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
 import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import type { PlaygroundNodeData } from '@/features/playground/types';
+import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { getCurrentSessionId } from '@/features/session/currentSession';
+import { BackendApiError } from '@/lib/apiClient';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
 import styles from './PlaygroundCanvas.module.css';
@@ -45,6 +47,59 @@ type PlaygroundCanvasProps = {
   onClosePreview: () => void;
 };
 
+type Clarification = {
+  eventId: string | null;
+  agentName: string;
+  question: string;
+};
+
+function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
+  const value = metadata?.[key];
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function interruptType(metadata: Record<string, unknown> | null | undefined) {
+  return metadataString(metadata, 'interrupt_type') ?? metadataString(metadata, 'type');
+}
+
+function getClarification(run: RunSummary | null, events: RunEvent[]): Clarification | null {
+  let waitingEvent: RunEvent | null = null;
+
+  for (const event of events) {
+    if (
+      event.event_type === 'human_input.required'
+      && interruptType(event.metadata) === 'clarification'
+    ) {
+      waitingEvent = event;
+    }
+    if (
+      event.event_type === 'human_input.resumed'
+      && interruptType(event.metadata) === 'clarification'
+    ) {
+      waitingEvent = null;
+    }
+  }
+
+  if (!waitingEvent && (
+    run?.status !== 'waiting_input'
+    || interruptType(run.metadata) !== 'clarification'
+  )) return null;
+
+  const question = metadataString(waitingEvent?.metadata, 'question')
+    ?? waitingEvent?.message
+    ?? metadataString(run?.metadata, 'question')
+    ?? '작업을 계속하려면 추가 정보가 필요합니다.';
+  const rawAgentName = metadataString(waitingEvent?.metadata, 'agent_name')
+    ?? waitingEvent?.node_name
+    ?? metadataString(run?.metadata, 'node')
+    ?? 'Agent';
+  const agentName = rawAgentName === 'collect_clarification'
+    ? 'Supervisor Agent'
+    : rawAgentName;
+
+  return { eventId: waitingEvent?.event_id ?? null, agentName, question };
+}
+
 export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
   const initialGraph = useMemo(
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
@@ -55,6 +110,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
+  const [isSubmittingClarification, setIsSubmittingClarification] = useState(false);
+  const [clarificationError, setClarificationError] = useState<string | null>(null);
   const { run, events } = useAgentRunStream(activeRunId);
 
   const { collapse } = useSidebar();
@@ -62,6 +119,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
   );
   const isGenerating = isStartingRun || isRunActive;
+  const clarification = useMemo(() => getClarification(run, events), [events, run]);
+
+  useEffect(() => {
+    setIsSubmittingClarification(false);
+    setClarificationError(null);
+  }, [clarification?.eventId]);
 
   useEffect(() => {
     const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
@@ -115,6 +178,23 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       console.error('Agent run failed:', error);
     } finally {
       setIsStartingRun(false);
+    }
+  };
+
+  const handleClarificationSend = async (answer: string) => {
+    if (!activeRunId || !clarification || isSubmittingClarification) return;
+
+    setIsSubmittingClarification(true);
+    setClarificationError(null);
+    try {
+      await resumeAgentRun(activeRunId, answer);
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '답변을 전송하지 못했습니다. 다시 시도해 주세요.';
+      setClarificationError(message);
+      setIsSubmittingClarification(false);
+      throw error;
     }
   };
 
@@ -199,6 +279,10 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       <PlaygroundOverlay
         isGenerating={isGenerating}
         onPromptSend={handlePromptSend}
+        clarification={clarification}
+        isSubmittingClarification={isSubmittingClarification}
+        clarificationError={clarificationError}
+        onClarificationSend={handleClarificationSend}
         preview={preview}
         onClosePreview={onClosePreview}
         onCreateNode={handleCreateNode}

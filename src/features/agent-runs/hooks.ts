@@ -27,6 +27,12 @@ function appendEvent(events: RunEvent[], nextEvent: RunEvent): RunEvent[] {
   ));
 }
 
+function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
+  if (event.event_type === 'human_input.required') return 'waiting_input';
+  if (event.event_type === 'human_input.resumed') return 'running';
+  return null;
+}
+
 function reconnectDelay(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     const timer = window.setTimeout(resolve, RECONNECT_DELAY_MS);
@@ -74,8 +80,19 @@ export function useAgentRunStream(
 
               if (message.type === 'run.event') {
                 lastEventId = message.id;
+                const nextStatus = statusFromEvent(message.data);
                 setState((current) => ({
                   ...current,
+                  run: current.run && nextStatus
+                    ? {
+                        ...current.run,
+                        status: nextStatus,
+                        metadata: {
+                          ...current.run.metadata,
+                          ...message.data.metadata,
+                        },
+                      }
+                    : current.run,
                   events: appendEvent(current.events, message.data),
                   isStreaming: true,
                   error: null,
