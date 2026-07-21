@@ -1,3 +1,5 @@
+import { MessageCircleQuestion } from 'lucide-react';
+
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 
 import styles from './PromptComposer.module.css';
@@ -5,6 +7,14 @@ import styles from './PromptComposer.module.css';
 interface PromptComposerProps {
   isGenerating: boolean;
   onSend: (prompt: string) => Promise<void>;
+  clarification: {
+    eventId: string | null;
+    agentName: string;
+    question: string;
+  } | null;
+  isSubmittingClarification: boolean;
+  clarificationError: string | null;
+  onClarificationSend: (answer: string) => Promise<void>;
 }
 
 // TODO: 실제 SVG로 교체 예정.
@@ -34,42 +44,89 @@ function SendIcon() {
 export function PromptComposer({
   isGenerating,
   onSend,
+  clarification,
+  isSubmittingClarification,
+  clarificationError,
+  onClarificationSend,
 }: PromptComposerProps) {
   const { ref, resize } = useAutoResizeTextarea(5);
-  const handleSend = () => {
+  const handleSend = async () => {
     const prompt = ref.current?.value.trim();
 
-    if (!prompt || isGenerating) return;
+    if (!prompt || isSubmittingClarification || (isGenerating && !clarification)) return;
 
-    void onSend(prompt);
+    try {
+      if (clarification) {
+        await onClarificationSend(prompt);
+      } else {
+        await onSend(prompt);
+      }
+      if (ref.current) ref.current.value = '';
+      resize();
+    } catch {
+      // 부모가 오류를 표시하며, 입력값은 재시도를 위해 유지한다.
+    }
   };
 
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    event.preventDefault();
+    void handleSend();
+  };
 
   return (
     <div
-      className={`${styles.composer} ${isGenerating ? styles.generating : ''
+      className={`${styles.composer} ${isGenerating ? styles.generating : ''} ${clarification ? styles.composerClarification : ''
         }`}
     >
-      {/* 입력 영역 */}
-      <textarea ref={ref} onInput={resize} rows={1} placeholder="프롬프트를 입력해 주세요" className={`${styles.textarea} ${styles.input}`} />
+      {clarification ? (
+        <section className={styles.clarificationPanel} aria-label="에이전트 추가 질문">
+          <div className={styles.clarificationMeta}>
+            <MessageCircleQuestion aria-hidden />
+            <span>{clarification.agentName}</span>
+          </div>
+          <p className={styles.clarificationQuestion}>{clarification.question}</p>
+        </section>
+      ) : null}
 
-      {/* 하단 액션 줄 */}
-      <div className={styles.actions}>
-        {/* 좌측: + 버튼 */}
-        <button type="button" aria-label="추가" className={styles.iconButton}>
-          <PlusIcon />
-        </button>
+      <div className={styles.content}>
+        <textarea
+          ref={ref}
+          onInput={resize}
+          onKeyDown={handleKeyDown}
+          rows={1}
+          placeholder={isSubmittingClarification
+            ? '답변을 전송하고 있습니다'
+            : clarification
+              ? '답변을 입력해 주세요'
+              : '프롬프트를 입력해 주세요'}
+          className={`${styles.textarea} ${styles.input}`}
+          disabled={isSubmittingClarification}
+          aria-describedby={clarificationError ? 'clarification-error' : undefined}
+        />
 
-        {/* 우측: 전송 버튼 (원형) */}
-        <button
-          type="button"
-          aria-label="전송"
-          className={`${styles.iconButton} ${styles.sendButton}`}
-          onClick={handleSend}
-          disabled={isGenerating}
-        >
-          <SendIcon />
-        </button>
+        {clarificationError ? (
+          <p id="clarification-error" className={styles.error} role="alert">
+            {clarificationError}
+          </p>
+        ) : null}
+
+        <div className={styles.actions}>
+          <button type="button" aria-label="추가" className={styles.iconButton}>
+            <PlusIcon />
+          </button>
+
+          <button
+            type="button"
+            aria-label={clarification ? '답변 전송' : '전송'}
+            className={`${styles.iconButton} ${styles.sendButton}`}
+            onClick={() => void handleSend()}
+            disabled={isSubmittingClarification || (isGenerating && !clarification)}
+            aria-busy={isSubmittingClarification}
+          >
+            <SendIcon />
+          </button>
+        </div>
       </div>
     </div>
   );

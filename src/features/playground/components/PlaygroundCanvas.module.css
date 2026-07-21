@@ -13,24 +13,6 @@
       #ffffff 100%);
 }
 
-.canvas::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 92%, transparent 0 15.5rem, rgb(255 255 255 / 58%) 15.58rem 15.68rem, transparent 15.82rem),
-    radial-gradient(circle at 50% 92%, transparent 0 24rem, rgb(255 255 255 / 28%) 24.08rem 24.16rem, transparent 24.28rem),
-    radial-gradient(circle at 50% 92%, transparent 0 34rem, rgb(255 255 255 / 20%) 34.08rem 34.16rem, transparent 34.28rem);
-  background-size:
-    auto,
-    auto,
-    auto;
-  mask-image: radial-gradient(ellipse 78% 76% at 50% 58%, #000 0%, transparent 78%);
-  opacity: 0.8;
-}
-
 .canvas> :global(.react-flow) {
   position: relative;
   z-index: 1;
