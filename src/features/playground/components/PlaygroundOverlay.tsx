@@ -12,6 +12,14 @@ import styles from './PlaygroundOverlay.module.css';
 interface PlaygroundOverlayProps {
   isGenerating: boolean;
   onPromptSend: (prompt: string) => Promise<void>;
+  clarification: {
+    eventId: string | null;
+    agentName: string;
+    question: string;
+  } | null;
+  isSubmittingClarification: boolean;
+  clarificationError: string | null;
+  onClarificationSend: (answer: string) => Promise<void>;
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
   onCreateNode: (kind: CreatableNodeKind) => void;
@@ -20,6 +28,10 @@ interface PlaygroundOverlayProps {
 export function PlaygroundOverlay({
   isGenerating,
   onPromptSend,
+  clarification,
+  isSubmittingClarification,
+  clarificationError,
+  onClarificationSend,
   preview,
   onClosePreview,
   onCreateNode,
@@ -64,6 +76,10 @@ export function PlaygroundOverlay({
         <PromptComposer
           isGenerating={isGenerating}
           onSend={onPromptSend}
+          clarification={clarification}
+          isSubmittingClarification={isSubmittingClarification}
+          clarificationError={clarificationError}
+          onClarificationSend={onClarificationSend}
         />
       </div>
     </div>
