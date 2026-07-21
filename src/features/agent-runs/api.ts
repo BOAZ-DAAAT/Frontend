@@ -1,6 +1,6 @@
 import { apiClient } from '@/lib/apiClient';
 
-import type { RunStatus, RunSummary } from '@/features/runs/types';
+import type { RunEvent, RunStatus, RunSummary } from '@/features/runs/types';
 
 export type AgentRunResponse = {
   run_id: string;
@@ -17,6 +17,16 @@ export type AgentRunResumeResponse = {
   resume_type: 'clarification' | 'analysis_review' | 'approval';
 };
 
+export type BranchStage = 'sql' | 'eda' | 'analysis' | 'insight';
+
+export type AgentRunBranchResponse = {
+  run_id: string;
+  thread_id: string;
+  status: 'created';
+  start_stage: BranchStage;
+  source_run_id: string;
+};
+
 export function createAgentRun(sessionId: string, query: string) {
   return apiClient.post<AgentRunResponse>('/agent-runs', {
     session_id: sessionId,
@@ -26,6 +36,10 @@ export function createAgentRun(sessionId: string, query: string) {
 
 export function getAgentRun(runId: string) {
   return apiClient.get<RunSummary>(`/agent-runs/${encodeURIComponent(runId)}`);
+}
+
+export function listAgentRunEvents(runId: string) {
+  return apiClient.get<RunEvent[]>(`/agent-runs/${encodeURIComponent(runId)}/events`);
 }
 
 export function resumeAgentRun(runId: string, answer: string) {
@@ -45,6 +59,16 @@ export function resumeAgentRunApproval(runId: string, approved: boolean, reason?
       type: 'approval',
       approved,
       ...(reason ? { reason } : {}),
+    },
+  );
+}
+
+export function branchAgentRun(runId: string, startStage: BranchStage, instruction: string) {
+  return apiClient.post<AgentRunBranchResponse>(
+    `/agent-runs/${encodeURIComponent(runId)}/branch`,
+    {
+      start_stage: startStage,
+      instruction,
     },
   );
 }

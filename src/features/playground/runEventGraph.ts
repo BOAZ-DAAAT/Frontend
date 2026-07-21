@@ -22,10 +22,22 @@ const LIFECYCLE_EVENTS = new Set([
   'agent.failed',
 ]);
 
+const STAGE_DEPTH_BY_AGENT: Record<string, number> = {
+  sql_agent: 1,
+  eda_agent: 2,
+  analysis_agent: 3,
+  insight: 4,
+};
+
+const NODE_X_GAP = 460;
+const LANE_Y_START = 120;
+const LANE_Y_GAP = 240;
+
 type RuntimeNode = Node<PlaygroundNodeData> & {
   data: PlaygroundNodeData & {
     nodeSequence: number;
     parentNodeId: string | null;
+    agentName: string;
   };
 };
 
@@ -97,15 +109,38 @@ export function deriveNodeGraphFromEvents(
         eventType: event.event_type,
         lastMessage: event.message,
         lastEventAt: event.created_at,
+        runId: event.run_id,
         nodeSequence,
         parentNodeId,
+        agentName,
       },
     });
   }
 
-  const executionNodes = [...runtimeNodes.values()].sort(
+  const orderedRuntimeNodes = [...runtimeNodes.values()].sort(
     (left, right) => left.data.nodeSequence - right.data.nodeSequence,
   );
+  const laneByRunId = new Map<string, number>();
+  const positionedNodes: RuntimeNode[] = [];
+
+  for (const node of orderedRuntimeNodes) {
+    const runId = node.data.runId ?? node.id;
+    let laneIndex = laneByRunId.get(runId);
+    if (laneIndex === undefined) {
+      laneIndex = laneByRunId.size;
+      laneByRunId.set(runId, laneIndex);
+    }
+    const depth = STAGE_DEPTH_BY_AGENT[node.data.agentName] ?? node.data.nodeSequence;
+    positionedNodes.push({
+      ...node,
+      position: {
+        x: depth * NODE_X_GAP,
+        y: LANE_Y_START + laneIndex * LANE_Y_GAP,
+      },
+    });
+  }
+
+  const executionNodes = positionedNodes;
   const nodes = datasource ? [datasource, ...executionNodes] : executionNodes;
   const visibleIds = new Set(nodes.map((node) => node.id));
   const edges = executionNodes.map((node) => {

@@ -1,9 +1,23 @@
-import { ReactFlow, useEdgesState, useNodesState, type Edge, type Node } from '@xyflow/react';
+import {
+  ReactFlow,
+  applyNodeChanges,
+  useEdgesState,
+  useNodesState,
+  type Edge,
+  type Node,
+  type NodeChange,
+} from '@xyflow/react';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
 import '@xyflow/react/dist/style.css';
 
-import { createAgentRun, resumeAgentRun, resumeAgentRunApproval } from '@/features/agent-runs/api';
+import {
+  branchAgentRun,
+  createAgentRun,
+  resumeAgentRun,
+  resumeAgentRunApproval,
+  type BranchStage,
+} from '@/features/agent-runs/api';
 import {
   clearStoredActiveRunId,
   getStoredActiveRunId,
@@ -49,6 +63,13 @@ const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' 
   },
 };
 
+const BRANCH_STAGE_BY_NODE_KIND: Partial<Record<PlaygroundNodeData['kind'], BranchStage>> = {
+  'sql-agent': 'sql',
+  'EDA-agent': 'eda',
+  'analysis-agent': 'analysis',
+  'insight-agent': 'insight',
+};
+
 type PlaygroundCanvasProps = {
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
@@ -68,6 +89,7 @@ type Approval = {
 
 type SelectedNodeSummary = {
   id: string;
+  runId: string | null;
   label: string;
   kind: PlaygroundNodeData['kind'];
   status: PlaygroundNodeData['status'];
@@ -77,6 +99,11 @@ type NodeSummaryRequest = {
   data: NodeSummary | null;
   error: string | null;
   isLoading: boolean;
+};
+
+type PositionOffset = {
+  x: number;
+  y: number;
 };
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
@@ -148,7 +175,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
     [],
   );
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
+  const [nodes, setNodes] = useNodesState(initialGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
   const [selectedNodeSummary, setSelectedNodeSummary] = useState<SelectedNodeSummary | null>(null);
   const [nodeSummaryRequest, setNodeSummaryRequest] = useState<NodeSummaryRequest>({
@@ -157,6 +184,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     isLoading: false,
   });
   const hydratedSummaryNodes = useRef(new Set<string>());
+  const laneOffsetByRunId = useRef(new Map<string, PositionOffset>());
 
   const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
   const [isStartingRun, setIsStartingRun] = useState(false);
@@ -182,6 +210,60 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const clarification = useMemo(() => getClarification(run, events), [events, run]);
   const approval = useMemo(() => getApproval(run, events), [events, run]);
 
+  const handleNodesChange = (changes: NodeChange<Node<PlaygroundNodeData>>[]) => {
+    setNodes((currentNodes) => {
+      const currentById = new Map(currentNodes.map((node) => [node.id, node]));
+      const nextNodes = applyNodeChanges(changes, currentNodes);
+      const nextById = new Map(nextNodes.map((node) => [node.id, node]));
+      const laneDeltaByRunId = new Map<string, PositionOffset>();
+
+      for (const change of changes) {
+        if (change.type !== 'position' || !change.position) continue;
+        const previous = currentById.get(change.id);
+        const next = nextById.get(change.id);
+        const runId = previous?.data.runId;
+        if (!previous || !next || !runId) continue;
+        const deltaX = next.position.x - previous.position.x;
+        const deltaY = next.position.y - previous.position.y;
+        if (!deltaX && !deltaY) continue;
+        const previousDelta = laneDeltaByRunId.get(runId) ?? { x: 0, y: 0 };
+        laneDeltaByRunId.set(runId, {
+          x: previousDelta.x + deltaX,
+          y: previousDelta.y + deltaY,
+        });
+      }
+
+      if (!laneDeltaByRunId.size) return nextNodes;
+
+      laneDeltaByRunId.forEach((delta, runId) => {
+        const previousOffset = laneOffsetByRunId.current.get(runId) ?? { x: 0, y: 0 };
+        laneOffsetByRunId.current.set(runId, {
+          x: previousOffset.x + delta.x,
+          y: previousOffset.y + delta.y,
+        });
+      });
+
+      const movedIds = new Set(
+        changes
+          .filter((change) => change.type === 'position')
+          .map((change) => change.id),
+      );
+      return nextNodes.map((node) => {
+        const runId = node.data.runId;
+        const delta = runId ? laneDeltaByRunId.get(runId) : undefined;
+        if (!delta || movedIds.has(node.id)) return node;
+        return {
+          ...node,
+          position: {
+            ...node.position,
+            x: node.position.x + delta.x,
+            y: node.position.y + delta.y,
+          },
+        };
+      });
+    });
+  };
+
   useEffect(() => {
     setIsSubmittingClarification(false);
     setClarificationError(null);
@@ -195,14 +277,20 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   useEffect(() => {
     const nextGraph = deriveNodeGraphFromEvents(events, playgroundNodes, playgroundEdges);
     setNodes((currentNodes) => {
-      const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
-      const eventNodes = nextGraph.nodes.map((node) => {
-        const currentNode = currentNodesById.get(node.id);
-        return currentNode
-          ? { ...node, position: currentNode.position }
-          : node;
-      });
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
+
+      const eventNodes = nextGraph.nodes.map((node) => {
+        const offset = node.data.runId ? laneOffsetByRunId.current.get(node.data.runId) : undefined;
+        if (!offset || (!offset.x && !offset.y)) return node;
+        return {
+          ...node,
+          position: {
+            ...node.position,
+            x: node.position.x + offset.x,
+            y: node.position.y + offset.y,
+          },
+        };
+      });
 
       return [...eventNodes, ...manualNodes];
     });
@@ -224,27 +312,25 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       return [...eventEdges, ...manualEdges];
     });
 
-    if (activeRunId) {
-      for (const node of nextGraph.nodes) {
-        if (node.data.status !== 'success') continue;
-        const hydrationKey = `${activeRunId}:${node.id}`;
-        if (hydratedSummaryNodes.current.has(hydrationKey)) continue;
-        hydratedSummaryNodes.current.add(hydrationKey);
-        void getAgentNodeSummary(activeRunId, node.id)
-          .then((response) => {
-            setNodes((currentNodes) => currentNodes.map((currentNode) => (
-              currentNode.id === node.id
-                ? {
-                    ...currentNode,
-                    data: { ...currentNode.data, description: response.summary.key_finding },
-                  }
-                : currentNode
-            )));
-          })
-          .catch(() => {
-            hydratedSummaryNodes.current.delete(hydrationKey);
-          });
-      }
+    for (const node of nextGraph.nodes) {
+      if (node.data.status !== 'success' || !node.data.runId) continue;
+      const hydrationKey = `${node.data.runId}:${node.id}`;
+      if (hydratedSummaryNodes.current.has(hydrationKey)) continue;
+      hydratedSummaryNodes.current.add(hydrationKey);
+      void getAgentNodeSummary(node.data.runId, node.id)
+        .then((response) => {
+          setNodes((currentNodes) => currentNodes.map((currentNode) => (
+            currentNode.id === node.id
+              ? {
+                  ...currentNode,
+                  data: { ...currentNode.data, description: response.summary.key_finding },
+                }
+              : currentNode
+          )));
+        })
+        .catch(() => {
+          hydratedSummaryNodes.current.delete(hydrationKey);
+        });
     }
   }, [activeRunId, events, setEdges, setNodes]);
 
@@ -255,6 +341,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       if (!currentNode || currentNode.data.status === selected.status) return selected;
       return {
         ...selected,
+        runId: currentNode.data.runId ?? selected.runId,
         label: currentNode.data.label,
         kind: currentNode.data.kind,
         status: currentNode.data.status,
@@ -269,13 +356,13 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       setNodeSummaryRequest({ data: null, error: null, isLoading: false });
       return () => { cancelled = true; };
     }
-    if (!activeRunId || selectedNodeSummary.status !== 'success') {
+    if (!selectedNodeSummary.runId || selectedNodeSummary.status !== 'success') {
       setNodeSummaryRequest({ data: null, error: null, isLoading: false });
       return () => { cancelled = true; };
     }
 
     setNodeSummaryRequest({ data: null, error: null, isLoading: true });
-    getAgentNodeSummary(activeRunId, selectedNodeSummary.id)
+    getAgentNodeSummary(selectedNodeSummary.runId, selectedNodeSummary.id)
       .then((response) => {
         if (!cancelled) {
           setNodeSummaryRequest({ data: response.summary, error: null, isLoading: false });
@@ -295,7 +382,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       });
 
     return () => { cancelled = true; };
-  }, [activeRunId, selectedNodeSummary]);
+  }, [selectedNodeSummary]);
 
   const handlePromptSend = async (prompt: string) => {
     if (isGenerating) return;
@@ -420,14 +507,33 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
     setSelectedNodeSummary({
       id: node.id,
+      runId: node.data.runId ?? activeRunId,
       label: node.data.label,
       kind: node.data.kind,
       status: node.data.status,
     });
   };
 
-  const handleBranchPromptSend = async (_prompt: string) => {
-    // 노드 분기 실행 API는 서머리 데이터 계약이 정해진 뒤 연결한다.
+  const handleBranchPromptSend = async (prompt: string) => {
+    const branchSourceRunId = selectedNodeSummary?.runId ?? activeRunId;
+    if (!branchSourceRunId || !selectedNodeSummary || isGenerating) return;
+    const startStage = BRANCH_STAGE_BY_NODE_KIND[selectedNodeSummary.kind];
+    if (!startStage) {
+      throw new Error('이 노드에서는 분기를 시작할 수 없습니다.');
+    }
+
+    setIsStartingRun(true);
+    try {
+      const branchRun = await branchAgentRun(branchSourceRunId, startStage, prompt);
+      setActiveRunId(branchRun.run_id);
+      setStoredActiveRunId(branchRun.run_id);
+      setSelectedNodeSummary(null);
+    } catch (error) {
+      console.error('Branch run failed:', error);
+      throw error;
+    } finally {
+      setIsStartingRun(false);
+    }
   };
 
   const handlePaneClick = () => {
@@ -442,7 +548,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={handleNodeClick}
         onEdgeClick={handleEdgeClick}
@@ -465,7 +571,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         onApprovalDecision={handleApprovalDecision}
         nodeSummary={selectedNodeSummary}
         nodeSummaryData={nodeSummaryRequest.data}
-        nodeSummaryRunId={activeRunId}
+        nodeSummaryRunId={selectedNodeSummary?.runId ?? activeRunId}
         nodeSummaryError={nodeSummaryRequest.error}
         isNodeSummaryLoading={nodeSummaryRequest.isLoading}
         onCloseNodeSummary={() => setSelectedNodeSummary(null)}
