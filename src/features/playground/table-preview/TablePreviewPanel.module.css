@@ -30,7 +30,7 @@
   z-index: 1;
   width: min(57rem, calc(100vw - 20rem));
   max-height: calc(100vh - 10rem);
-  padding: 1rem 0.5rem 2rem;
+  padding: 1rem 0.5rem 0.5rem;
   pointer-events: auto;
   overflow: hidden;
   border: 1px solid rgb(255 255 255 / 20%);
@@ -39,7 +39,7 @@
   color: var(--color-brand-primary);
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
   transform-origin: top center;
-  animation: panelReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: panelReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
 }
 
 .panelClosing {
@@ -139,6 +139,12 @@
   gap: 1rem;
 }
 
+.sortControl {
+  position: relative;
+  z-index: 4;
+  min-width: 0;
+}
+
 .actionGroup {
   display: flex;
   align-items: center;
@@ -163,7 +169,20 @@
   cursor: pointer;
 }
 
-.actionButton:hover {
+.actionButton:hover:not(:disabled) {
+  background: rgb(255 255 255 / 30%);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sortStatusButton:disabled {
+  opacity: 1;
+}
+
+.actionButtonActive {
   background: rgb(255 255 255 / 30%);
 }
 
@@ -171,6 +190,38 @@
   width: 1.25rem;
   height: 1.25rem;
   flex-shrink: 0;
+}
+
+.sortLabel {
+  max-width: 12rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sortStatusIcon {
+  position: relative;
+  display: grid;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  place-items: center;
+}
+
+.sortStatusIcon svg {
+  position: absolute;
+}
+
+.sortClearIcon {
+  opacity: 0;
+}
+
+.clearSortButton:hover .sortDirectionIcon {
+  opacity: 0;
+}
+
+.clearSortButton:hover .sortClearIcon {
+  opacity: 1;
 }
 
 .tableSurface {
@@ -199,8 +250,36 @@
   pointer-events: none;
 }
 
+.sortingOverlay {
+  position: absolute;
+  top: 0.75rem;
+  right: 1rem;
+  z-index: 3;
+  display: inline-flex;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 0.5rem;
+  background: rgb(255 255 255 / 82%);
+  color: #646464;
+  font-size: var(--text-xs);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.sortingOverlay svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  animation: tablePreviewSpin 800ms linear infinite;
+}
+
 .tableViewport {
   width: 100%;
+  height: min(32rem, calc(100vh - 21rem));
+  min-height: 10rem;
   min-width: 0;
   overflow-x: auto;
   overflow-y: auto;
@@ -295,6 +374,38 @@
   text-overflow: ellipsis;
 }
 
+.headerSortButton {
+  display: inline-flex;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.headerSortLabel {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.headerSortButton svg {
+  width: 0.875rem;
+  height: 0.875rem;
+  flex: 0 0 0.875rem;
+  color: #737373;
+}
+
+.headerCell[aria-sort='ascending'] .headerSortButton,
+.headerCell[aria-sort='descending'] .headerSortButton {
+  color: var(--color-brand-primary);
+}
+
 .idCell {
   font-variant-numeric: tabular-nums;
 }
@@ -327,6 +438,54 @@
 }
 
 .error {
+  color: #b42318;
+}
+
+.errorState {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.retryButton,
+.loadMoreError {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: #b42318;
+  cursor: pointer;
+}
+
+.retryButton {
+  padding: 0.5rem 1rem;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--text-sm);
+}
+
+.retryButton svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.loadingMore,
+.loadMoreError {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  align-items: center;
+  justify-content: center;
+  color: #7f7f7f;
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+.loadMoreError {
   color: #b42318;
 }
 
@@ -431,6 +590,12 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes tablePreviewSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 

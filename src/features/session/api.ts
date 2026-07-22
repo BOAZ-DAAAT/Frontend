@@ -1,11 +1,12 @@
 import { apiClient } from '@/lib/apiClient';
 
 import type {
-    PreviewResponse,
     Session,
     SessionCreatePayload,
     SessionCreateResponse,
     SessionListResponse,
+    SessionTablePreviewParams,
+    SessionTablePreviewResponse,
     TablesResponse,
 } from './types';
 
@@ -29,10 +30,44 @@ export function listSessionTables(sessionId: string) {
     return apiClient.get<TablesResponse>(`/sessions/${encodeURIComponent(sessionId)}/tables`);
 }
 
-// 테이블 선택 시 샘플 조회
-export function previewSessionTable(sessionId: string, table: string, limit = 50) {
-    return apiClient.get<PreviewResponse>(
-        `/sessions/${encodeURIComponent(sessionId)}/tables/${encodeURIComponent(table)}/preview?limit=${limit}`,
+// 테이블 선택 시 정렬된 페이지 조회
+export function previewSessionTable({
+    sessionId,
+    table,
+    limit = 50,
+    sortBy,
+    sortOrder = 'asc',
+    cursor,
+    signal,
+}: SessionTablePreviewParams) {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (sortBy) {
+        query.set('sort_by', sortBy);
+        query.set('sort_order', sortOrder);
+    }
+    if (cursor) query.set('cursor', cursor);
+
+    return apiClient.get<SessionTablePreviewResponse>(
+        `/sessions/${encodeURIComponent(sessionId)}/tables/${encodeURIComponent(table)}/preview?${query}`,
+        { signal },
+    );
+}
+
+export function downloadSessionTableCsv({
+    sessionId,
+    table,
+    sortBy,
+    sortOrder = 'asc',
+}: Pick<SessionTablePreviewParams, 'sessionId' | 'table' | 'sortBy' | 'sortOrder'>) {
+    const query = new URLSearchParams();
+    if (sortBy) {
+        query.set('sort_by', sortBy);
+        query.set('sort_order', sortOrder);
+    }
+    const suffix = query.size > 0 ? `?${query}` : '';
+
+    return apiClient.blob(
+        `/sessions/${encodeURIComponent(sessionId)}/tables/${encodeURIComponent(table)}/export.csv${suffix}`,
     );
 }
 
