@@ -9,7 +9,15 @@ import { sectionIconMap } from './iconMap';
 import styles from './Sidebar.module.css';
 
 export function Sidebar() {
-  const { activeSection, isExpanded, openSection, toggleSessions, view } = useSidebar();
+  const {
+    activeSection,
+    isExpanded,
+    openSection,
+    openSessionCreate,
+    selectSession,
+    toggleSessions,
+    view,
+  } = useSidebar();
   const sidebarSections = useSidebarData();
   const isSessionView = view === 'sessions';
 
@@ -31,7 +39,7 @@ export function Sidebar() {
       <div className={styles.divider} />
 
       {isSessionView ? (
-        <SessionSidebar />
+        <SessionSidebar onCreateSession={openSessionCreate} onSelectSession={selectSession} />
       ) : (
         <nav className={styles.sections}>
           {sidebarSections.map((section) => {

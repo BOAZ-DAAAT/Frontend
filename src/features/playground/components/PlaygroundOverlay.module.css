@@ -41,6 +41,33 @@
   pointer-events: auto;
 }
 
+.sessionConnectDock {
+  position: absolute;
+  top: 0;
+  right: 2rem;
+  bottom: 0;
+  left: 18rem;
+  z-index: 30;
+  display: grid;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 1.5rem 0 2rem;
+  place-items: center;
+  pointer-events: auto;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.sessionConnectDock::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 45rem) {
+  .sessionConnectDock {
+    left: 1rem;
+  }
+}
+
 .deleteDock {
   position: absolute;
   bottom: 1.5rem;

@@ -1,12 +1,13 @@
-.canvas {
+.page {
   --mist-blue: #b8cbd9;
   --ice-blue: #d9dde2;
 
   position: relative;
   isolation: isolate;
-  width: 100vw;
-  height: 100vh;
+  display: grid;
+  min-height: 100svh;
   overflow: hidden;
+  place-items: center;
   background-color: var(--mist-blue);
   background:
     radial-gradient(ellipse 62% 58% at 74% 58%,
@@ -28,8 +29,8 @@
       #b4c2d3 100%);
 }
 
-.canvas::before,
-.canvas::after {
+.page::before,
+.page::after {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -37,7 +38,7 @@
   pointer-events: none;
 }
 
-.canvas::before {
+.page::before {
   inset: -10%;
   background:
     radial-gradient(circle at 78% 55%, rgb(238 210 203 / 36%), transparent 24%),
@@ -45,14 +46,49 @@
   filter: blur(30px);
 }
 
-.canvas::after {
+.page::after {
   background:
     radial-gradient(ellipse at center, transparent 52%, rgb(103 130 157 / 12%) 100%),
     linear-gradient(180deg, rgb(255 255 255 / 5%), transparent 36%, rgb(124 145 174 / 7%));
 }
 
-.canvas > :global(.react-flow) {
+.orbRow {
   position: relative;
   z-index: 1;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(100vw, 56rem);
+}
+
+.orbSlot {
+  position: relative;
+  width: min(50vw, 28rem);
+  aspect-ratio: 1;
+}
+
+.orbSlot .canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 181.4%;
+  max-width: none;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.canvas {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: min(100vw, 50rem);
+  height: auto;
+  aspect-ratio: 4 / 3;
+  filter: blur(2.8px) saturate(1.04);
+}
+
+@media (max-width: 40rem) {
+  .canvas {
+    width: 118vw;
+  }
 }

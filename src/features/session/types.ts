@@ -30,4 +30,23 @@ export type SessionListResponse = {
     sessions: Session[];
 };
 
+export type SortOrder = 'asc' | 'desc';
+
+export type SessionTablePreviewParams = {
+    sessionId: string;
+    table: string;
+    limit?: number;
+    sortBy?: string;
+    sortOrder?: SortOrder;
+    cursor?: string;
+    signal?: AbortSignal;
+};
+
+export type SessionTablePreviewResponse = PreviewResponse & {
+    page_info: {
+        next_cursor: string | null;
+        has_more: boolean;
+    };
+};
+
 export type { PreviewResponse, TablesResponse };
