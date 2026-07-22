@@ -9,9 +9,13 @@ import {
 import { flushSync } from 'react-dom';
 
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import { getCurrentSessionId } from '@/features/session/currentSession';
 
+import { listAgentReports } from './api';
 import { ReportCard } from './ReportCard';
 import { reports, type Report } from './reportData';
+import { toUiReport } from './reportAdapter';
+import { REPORTS_UPDATED_EVENT } from './reportEvents';
 import styles from './ReportWorkspace.module.css';
 
 const COLUMN_COUNT = 3;
@@ -146,17 +150,41 @@ ${transitionRules}
 
 export function ReportWorkspace() {
   const { selectedItemId, collapse } = useSidebar();
+  const [availableReports, setAvailableReports] = useState<Report[]>(reports);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [transitionReportId, setTransitionReportId] = useState<string | null>(null);
   const previousSidebarSelectionRef = useRef(selectedItemId);
   const transitionInProgressRef = useRef(false);
 
   const reportItems = useMemo<ReportItem[]>(() => {
-    return reports.map((report, order) => ({
+    return availableReports.map((report, order) => ({
       report,
       order,
       transitionName: `report-item-${order + 1}`,
     }));
+  }, [availableReports]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const sessionId = getCurrentSessionId();
+    if (!sessionId) return () => { cancelled = true; };
+
+    const loadReports = () => {
+      void listAgentReports(sessionId)
+        .then((response) => {
+          if (!cancelled) setAvailableReports(response.reports.map(toUiReport));
+        })
+        .catch(() => {
+          // 기존 목업은 연결 전 화면을 위해 유지한다.
+        });
+    };
+
+    loadReports();
+    window.addEventListener(REPORTS_UPDATED_EVENT, loadReports);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(REPORTS_UPDATED_EVENT, loadReports);
+    };
   }, []);
 
   const reportTransitionStyles = useMemo(() => {
@@ -249,10 +277,10 @@ export function ReportWorkspace() {
     previousSidebarSelectionRef.current = selectedItemId;
 
     if (selectedItemId === previousSelection) return;
-    if (selectedItemId && reports.some((report) => report.id === selectedItemId)) {
+    if (selectedItemId && availableReports.some((report) => report.id === selectedItemId)) {
       runReportTransition(selectedItemId, selectedItemId);
     }
-  }, [runReportTransition, selectedItemId]);
+  }, [availableReports, runReportTransition, selectedItemId]);
 
   useEffect(() => {
     if (!selectedReportId) return;
@@ -265,7 +293,7 @@ export function ReportWorkspace() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [closeSelectedReport, selectedReportId]);
 
-  const selectedReport = reports.find((report) => report.id === selectedReportId) ?? null;
+  const selectedReport = availableReports.find((report) => report.id === selectedReportId) ?? null;
 
   const handleBackgroundClick = () => {
     if (selectedReportId) {

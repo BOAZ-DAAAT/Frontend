@@ -31,8 +31,12 @@ import type { CreatableNodeKind } from '@/features/playground/node-editor';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
 import { getAgentNodeSummary } from '@/features/playground/node-summary/api';
 import type { NodeSummary } from '@/features/playground/node-summary/types';
+import { createAgentNodeReport } from '@/features/playground/report/api';
+import { notifyReportsUpdated } from '@/features/playground/report/reportEvents';
+import type { AgentNodeReportResponse } from '@/features/playground/report/types';
 import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import { useMode } from '@/features/playground/toolbar/ModeContext';
 import type { PlaygroundNodeData } from '@/features/playground/types';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { getCurrentSessionId } from '@/features/session/currentSession';
@@ -104,6 +108,12 @@ type SelectedNodeSummary = {
 
 type NodeSummaryRequest = {
   data: NodeSummary | null;
+  error: string | null;
+  isLoading: boolean;
+};
+
+type NodeReportRequest = {
+  data: AgentNodeReportResponse | null;
   error: string | null;
   isLoading: boolean;
 };
@@ -233,6 +243,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     error: null,
     isLoading: false,
   });
+  const [nodeReportRequest, setNodeReportRequest] = useState<NodeReportRequest>({
+    data: null,
+    error: null,
+    isLoading: false,
+  });
+  const reportRequestSequence = useRef(0);
   const hydratedSummaryNodes = useRef(new Set<string>());
   const laneOffsetByRunId = useRef(new Map<string, PositionOffset>());
 
@@ -293,6 +309,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   }, [runStreamError, run]);
 
   const { collapse, view } = useSidebar();
+  const { mode } = useMode();
   const isSessionView = view === 'sessions';
   const isRunActive = Boolean(
     activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
@@ -479,6 +496,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     return () => { cancelled = true; };
   }, [selectedNodeSummary]);
 
+  useEffect(() => {
+    reportRequestSequence.current += 1;
+    setNodeReportRequest({ data: null, error: null, isLoading: false });
+    if (mode === 'report') setSelectedNodeSummary(null);
+  }, [mode]);
+
   const handlePromptSend = async (prompt: string) => {
     if (isGenerating) return;
 
@@ -601,6 +624,37 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   };
 
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
+    if (mode === 'report') {
+      setSelectedNodeSummary(null);
+      if (node.data.kind !== 'insight-agent' || node.data.status !== 'success' || !node.data.runId) {
+        setNodeReportRequest({
+          data: null,
+          error: '완료된 Insight 노드를 선택해 주세요.',
+          isLoading: false,
+        });
+        return;
+      }
+
+      const requestSequence = reportRequestSequence.current + 1;
+      reportRequestSequence.current = requestSequence;
+      setNodeReportRequest({ data: null, error: null, isLoading: true });
+      void createAgentNodeReport(node.data.runId, node.id)
+        .then((response) => {
+          if (reportRequestSequence.current !== requestSequence) return;
+          setNodeReportRequest({ data: response, error: null, isLoading: false });
+          notifyReportsUpdated();
+        })
+        .catch((error: unknown) => {
+          if (reportRequestSequence.current !== requestSequence) return;
+          const message = error instanceof BackendApiError
+            ? error.message
+            : '리포트를 생성하지 못했습니다.';
+          setNodeReportRequest({ data: null, error: message, isLoading: false });
+        });
+      return;
+    }
+
+    setNodeReportRequest({ data: null, error: null, isLoading: false });
     setSelectedNodeSummary({
       id: node.id,
       runId: node.data.runId ?? activeRunId,
@@ -647,6 +701,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       setActiveRunId(null);
       setVisibleEvents([]);
       setSelectedNodeSummary(null);
+      setNodeReportRequest({ data: null, error: null, isLoading: false });
       setNodes(initialGraph.nodes);
       setEdges(initialGraph.edges);
     } catch (error) {
@@ -661,6 +716,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
   const handlePaneClick = () => {
     setSelectedNodeSummary(null);
+    reportRequestSequence.current += 1;
+    setNodeReportRequest({ data: null, error: null, isLoading: false });
     collapse();
   };
 
@@ -701,6 +758,13 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         nodeSummaryError={nodeSummaryRequest.error}
         isNodeSummaryLoading={nodeSummaryRequest.isLoading}
         onCloseNodeSummary={() => setSelectedNodeSummary(null)}
+        generatedReport={nodeReportRequest.data}
+        generatedReportError={nodeReportRequest.error}
+        isGeneratingReport={nodeReportRequest.isLoading}
+        onCloseGeneratedReport={() => {
+          reportRequestSequence.current += 1;
+          setNodeReportRequest({ data: null, error: null, isLoading: false });
+        }}
         onBranchPromptSend={handleBranchPromptSend}
         canDeleteAllNodes={hasDeletableNodes && !isGenerating && !isDeletingNodes}
         isDeletingAllNodes={isDeletingNodes}
