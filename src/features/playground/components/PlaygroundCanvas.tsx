@@ -26,6 +26,11 @@ import {
 } from '@/features/agent-runs/activeRunStorage';
 import { useAgentRunStream } from '@/features/agent-runs/hooks';
 import { PlaygroundEdge } from '@/features/playground/edge/PlaygroundEdge';
+import {
+  clearStoredPlaygroundGraph,
+  getStoredPlaygroundGraph,
+  setStoredPlaygroundGraph,
+} from '@/features/playground/graphStorage';
 import { playgroundEdges, playgroundNodes } from '@/features/playground/mocks';
 import type { CreatableNodeKind } from '@/features/playground/node-editor';
 import { PlaygroundNode } from '@/features/playground/node/PlaygroundNode';
@@ -225,8 +230,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
     [],
   );
-  const [nodes, setNodes] = useNodesState(initialGraph.nodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
+  const initialStoredGraph = useMemo(
+    () => getStoredPlaygroundGraph(initialGraph.nodes, initialGraph.edges),
+    [initialGraph.edges, initialGraph.nodes],
+  );
+  const [nodes, setNodes] = useNodesState(initialStoredGraph.nodes);
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialStoredGraph.edges);
   const [selectedNodeSummary, setSelectedNodeSummary] = useState<SelectedNodeSummary | null>(null);
   const [nodeSummaryRequest, setNodeSummaryRequest] = useState<NodeSummaryRequest>({
     data: null,
@@ -283,6 +292,10 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   useEffect(() => {
     setVisibleEvents((currentEvents) => mergeRunEvents(currentEvents, events));
   }, [events]);
+
+  useEffect(() => {
+    setStoredPlaygroundGraph(nodes, edges);
+  }, [edges, nodes]);
 
   useEffect(() => {
     // 새로고침으로 복원한 run_id가 더 이상 존재하지 않으면(삭제됨 등) 저장값을 비운다.
@@ -368,6 +381,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   }, [approval?.eventId]);
 
   useEffect(() => {
+    if (activeRunId && !run && !runStreamError && visibleEvents.length === 0) return;
+
     const nextGraph = deriveNodeGraphFromEvents(visibleEvents, playgroundNodes, playgroundEdges);
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
@@ -644,6 +659,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     try {
       if (activeRunId) await deleteAgentRun(activeRunId);
       clearStoredActiveRunId();
+      clearStoredPlaygroundGraph();
       setActiveRunId(null);
       setVisibleEvents([]);
       setSelectedNodeSummary(null);

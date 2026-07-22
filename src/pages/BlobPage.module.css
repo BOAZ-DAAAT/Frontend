@@ -10,7 +10,7 @@
   place-items: center;
   background-color: var(--mist-blue);
   background:
-    radial-gradient(ellipse 62% 58% at 74% 58%,
+    radial-gradient(ellipse 62% 58% at 50% 58%,
       rgb(232 203 198 / 76%) 0%,
       rgb(232 203 198 / 24%) 34%,
       transparent 68%),
@@ -41,7 +41,7 @@
 .page::before {
   inset: -10%;
   background:
-    radial-gradient(circle at 78% 55%, rgb(238 210 203 / 36%), transparent 24%),
+    radial-gradient(circle at 50% 58%, rgb(238 210 203 / 36%), transparent 24%),
     radial-gradient(circle at 38% 24%, rgb(238 241 243 / 25%), transparent 34%);
   filter: blur(30px);
 }

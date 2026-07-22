@@ -67,6 +67,36 @@ function summaryFromEvent(event: RunEvent): string {
   return event.message;
 }
 
+function metadataNestedString(event: RunEvent, parentKey: string, key: string): string | null {
+  const parent = event.metadata?.[parentKey];
+  if (!parent || typeof parent !== 'object') return null;
+  const value = (parent as Record<string, unknown>)[key];
+  return typeof value === 'string' && value ? value : null;
+}
+
+function branchInstructionFromMessage(message: string): string | null {
+  const match = message.match(/^'(.+)' 지시사항으로 /);
+  return match?.[1] ?? null;
+}
+
+function queryInfoFromEvent(event: RunEvent): { label: string; text: string } | null {
+  const branchInstruction = metadataString(event, 'branch_instruction')
+    ?? metadataNestedString(event, 'summary', 'branch_instruction')
+    ?? (event.event_type === 'branch.started' ? branchInstructionFromMessage(event.message) : null);
+  if (branchInstruction) {
+    return { label: '분기 쿼리', text: branchInstruction };
+  }
+
+  const query = metadataString(event, 'query')
+    ?? metadataString(event, 'user_query')
+    ?? metadataNestedString(event, 'summary', 'query');
+  if (query) {
+    return { label: '원본 쿼리', text: query };
+  }
+
+  return null;
+}
+
 export function deriveNodeGraphFromEvents(
   events: RunEvent[],
   baseNodes: Node<PlaygroundNodeData>[],
@@ -74,8 +104,14 @@ export function deriveNodeGraphFromEvents(
 ): { nodes: Node<PlaygroundNodeData>[]; edges: Edge[] } {
   const datasource = baseNodes.find((node) => node.id === 'datasource');
   const runtimeNodes = new Map<string, RuntimeNode>();
+  const queryByRunId = new Map<string, { label: string; text: string }>();
 
   for (const event of events) {
+    const queryInfo = queryInfoFromEvent(event);
+    if (queryInfo && !queryByRunId.has(event.run_id)) {
+      queryByRunId.set(event.run_id, queryInfo);
+    }
+
     if (!LIFECYCLE_EVENTS.has(event.event_type)) continue;
 
     const nodeId = metadataString(event, 'node_id');
@@ -121,6 +157,7 @@ export function deriveNodeGraphFromEvents(
     (left, right) => left.data.nodeSequence - right.data.nodeSequence,
   );
   const laneByRunId = new Map<string, number>();
+  const firstNodeIdByRunId = new Map<string, string>();
   const positionedNodes: RuntimeNode[] = [];
 
   for (const node of orderedRuntimeNodes) {
@@ -130,12 +167,21 @@ export function deriveNodeGraphFromEvents(
       laneIndex = laneByRunId.size;
       laneByRunId.set(runId, laneIndex);
     }
+    if (!firstNodeIdByRunId.has(runId)) {
+      firstNodeIdByRunId.set(runId, node.id);
+    }
     const depth = STAGE_DEPTH_BY_AGENT[node.data.agentName] ?? node.data.nodeSequence;
+    const queryInfo = firstNodeIdByRunId.get(runId) === node.id ? queryByRunId.get(runId) : undefined;
     positionedNodes.push({
       ...node,
       position: {
         x: depth * NODE_X_GAP,
         y: LANE_Y_START + laneIndex * LANE_Y_GAP,
+      },
+      data: {
+        ...node.data,
+        queryLabel: queryInfo?.label,
+        queryText: queryInfo?.text,
       },
     });
   }
