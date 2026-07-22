@@ -369,10 +369,17 @@ function toReportTone(text: string): string {
     .replace(/직접적이다\./g, '직접적입니다.')
     .replace(/적절하다\./g, '적절합니다.')
     .replace(/필요하다\./g, '필요합니다.')
+    .replace(/보여준다\./g, '보여줍니다.')
+    .replace(/나타난다\./g, '나타납니다.')
+    .replace(/보인다\./g, '보입니다.')
+    .replace(/시사한다\./g, '시사합니다.')
+    .replace(/지지한다\./g, '지지합니다.')
+    .replace(/맞다\./g, '맞습니다.')
     .replace(/사용했다\./g, '사용했습니다.')
     .replace(/고려했다\./g, '고려했습니다.')
     .replace(/확인했다\./g, '확인했습니다.')
     .replace(/만들었다\./g, '만들었습니다.')
+    .replace(/했다\./g, '했습니다.')
     .replace(/않는다\./g, '않습니다.')
     .replace(/없다\./g, '없습니다.')
     .replace(/있다\./g, '있습니다.')
@@ -384,8 +391,27 @@ function ensureReportSentence(text: string): string {
   const value = toReportTone(text).trim();
   if (!value) return '';
   if (/(습니다|됩니다|하였습니다|입니다|였습니다|입니다)\.$/.test(value)) return value;
+  if (value.endsWith('됨')) return `${value.slice(0, -1)}됩니다.`;
   if (/[.!?]$/.test(value)) return value;
   return `${value}입니다.`;
+}
+
+function normalizeMethodItem(label: string, text: string): string {
+  const value = String(text).trim();
+  if (!value) return '';
+  if (label === 'fallbacks considered') {
+    const base = value.replace(/[.!?]$/, '').replace(/입니다$/, '');
+    return `대안으로 ${base}을 검토할 수 있습니다.`;
+  }
+  return ensureReportSentence(value);
+}
+
+function analysisPurposeText(item: NodeSummaryAnalysisItem): string {
+  if (item.purpose?.trim()) return item.purpose.trim();
+  if (item.method?.trim()) {
+    return `이 항목은 ${item.title} 항목의 판단 근거를 ${item.method.trim()} 방법으로 확인했습니다.`;
+  }
+  return `이 항목은 ${item.title} 항목의 판단 근거를 확인하기 위해 분석했습니다.`;
 }
 
 function analysisTitle(title: string): string {
@@ -408,20 +434,21 @@ function MethodStep({
   codeTerms: string[];
 }) {
   const items = Array.isArray(value)
-    ? value.map((item) => ensureReportSentence(String(item))).filter(Boolean)
+    ? value.map((item) => normalizeMethodItem(label, String(item))).filter(Boolean)
     : [];
-  const body = ensureReportSentence(stringifySummaryValue(value));
+  const body = normalizeMethodItem(label, stringifySummaryValue(value));
   if (!body && !items.length) return null;
+  const ListTag = label === 'assumptions checked' ? 'ol' : 'ul';
   return (
     <article className={styles.analysisMethodStep}>
       <h4>{index}. {label}</h4>
       <p><strong>{lead}</strong></p>
       {items.length ? (
-        <ul className={styles.analysisMethodBullets}>
+        <ListTag className={styles.analysisMethodBullets}>
           {items.map((item, itemIndex) => (
             <li key={itemIndex}><RichText text={item} codeTerms={codeTerms} /></li>
           ))}
-        </ul>
+        </ListTag>
       ) : (
         <p><RichText text={body} codeTerms={codeTerms} /></p>
       )}
@@ -455,20 +482,6 @@ function parseAnalysisEvidenceBody(body: string) {
     evidence,
     caution: caution.replace(/^'|'$/g, ''),
   };
-}
-
-function splitChartCaption(body: string): { summary: string; caution: string } {
-  const cautionMarkers = ['주의:', '주의사항:', '해석 주의:'];
-  for (const marker of cautionMarkers) {
-    const index = body.indexOf(marker);
-    if (index !== -1) {
-      return {
-        summary: body.slice(0, index).trim(),
-        caution: body.slice(index + marker.length).trim(),
-      };
-    }
-  }
-  return { summary: body.trim(), caution: '' };
 }
 
 function AnalysisEvidenceCard({
@@ -544,12 +557,13 @@ function AnalysisItemCard({
   codeTerms: string[];
 }) {
   const keyNumbers = Array.isArray(item.key_numbers) ? item.key_numbers.filter(Boolean) : [];
+  const purpose = analysisPurposeText(item);
   return (
     <article className={styles.analysisHypothesisCard}>
       <h4>{index + 1}. <RichText text={item.title} codeTerms={codeTerms} /></h4>
-      {item.purpose ? (
+      {purpose ? (
         <p className={styles.hypothesisReason}>
-          분석 목적: <RichText text={ensureReportSentence(item.purpose)} codeTerms={codeTerms} />
+          분석 목적: <RichText text={ensureReportSentence(purpose)} codeTerms={codeTerms} />
         </p>
       ) : null}
       {keyNumbers.length ? (
@@ -566,7 +580,7 @@ function AnalysisItemCard({
         ) : null}
         {item.result || item.decision ? (
           <div>
-            <dt>핵심 결과</dt>
+            <dt>판정</dt>
             <dd><RichText text={ensureReportSentence(item.result || item.decision || '')} codeTerms={codeTerms} /></dd>
           </div>
         ) : null}
@@ -598,7 +612,7 @@ function getEvidenceTables(value: unknown): { title: string; rows: Record<string
     .filter((table) => table.rows.length);
 }
 
-function AnalysisSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
+function AnalysisSummaryDocument({ summary }: { summary: NodeSummary }) {
   const detail = summary.detail;
   const methodDecision = isRecord(detail.method_decision) ? detail.method_decision : {};
   const analysisItems = getAnalysisItems(detail.analysis_items);
@@ -606,7 +620,6 @@ function AnalysisSummaryDocument({ summary, runId }: { summary: NodeSummary; run
   const keyStatistics = getFindingArray(detail.key_statistics);
   const evidenceTables = getEvidenceTables(detail.evidence_tables);
   const limitations = getStringArray(detail.limitations).slice(0, 3);
-  const supportingCharts = getFindingArray(detail.supporting_charts);
   const interpretation = getString(detail.interpretation);
   const limitationTerms = ['집계 수준', '인과', '소표본', '계절성', '통제'];
   const interpretationSentences = splitSentences(interpretation);
@@ -765,36 +778,6 @@ function AnalysisSummaryDocument({ summary, runId }: { summary: NodeSummary; run
         </div>
       </section>
 
-      {supportingCharts.length ? (
-        <details className={styles.analysisChartDetails}>
-          <summary>참고 차트 판독</summary>
-          <p className={styles.sectionNote}>
-            분석 단계가 새로 생성한 차트가 아니라, 이전 단계 차트를 판독해 참고한 근거입니다.
-          </p>
-          <div className={styles.analysisChartStack}>
-            {supportingCharts.map((item, index) => {
-              const chartText = splitChartCaption(item.body);
-              return (
-                <article key={`${item.heading}-${index}`} className={styles.analysisChartCard}>
-                  <div className={styles.analysisChartHeader}>
-                    <span>{index + 1}</span>
-                    <h4>{item.heading}</h4>
-                  </div>
-                  <FindingCharts runId={runId} chartArtifactIds={item.chart_artifact_ids} />
-                  {chartText.summary ? (
-                    <p><RichText text={ensureReportSentence(chartText.summary)} codeTerms={codeTerms} /></p>
-                  ) : null}
-                  {chartText.caution ? (
-                    <p className={styles.analysisChartCaution}>
-                      해석 주의: <RichText text={ensureReportSentence(chartText.caution)} codeTerms={codeTerms} />
-                    </p>
-                  ) : null}
-                </article>
-              );
-            })}
-          </div>
-        </details>
-      ) : null}
     </div>
   );
 }
@@ -1007,6 +990,119 @@ function EdaSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: s
   );
 }
 
+function firstSentences(text: string, count: number): string {
+  return splitSentences(text).slice(0, count).join(' ');
+}
+
+function InsightStageCard({
+  title,
+  description,
+  body,
+  codeTerms,
+  children,
+}: {
+  title: string;
+  description: string;
+  body: string;
+  codeTerms: string[];
+  children?: ReactNode;
+}) {
+  return (
+    <section className={styles.insightStageCard}>
+      <div className={styles.insightStageHeader}>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      {body ? (
+        <p className={styles.insightStageBody}>
+          <RichText text={ensureReportSentence(body)} codeTerms={codeTerms} />
+        </p>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+function InsightSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
+  const detail = summary.detail;
+  const codeTerms = collectCodeTerms(summary);
+  const answer = getString(detail.answer) || summary.key_finding || summary.conclusion;
+  const asIs = firstSentences(getString(detail.as_is) || getString(detail.evidence_synthesis) || answer, 2);
+  const toBe = getString(detail.to_be) || '확인된 관계를 운영 관리 기준으로 삼아 우선 점검 대상과 추적 지표를 정리해야 합니다.';
+  const toBeItems = splitSentences(toBe);
+  const actionPlan = getStringArray(detail.action_plan).slice(0, 3);
+  const actionItems = actionPlan.length ? actionPlan : ['근거 기반 실행 제안은 추가 검증 후 확정해야 합니다.'];
+  const limitations = getStringArray(detail.limitations).slice(0, 2);
+  const supportingCharts = getFindingArray(detail.supporting_charts).slice(0, 1);
+
+  return (
+    <div className={`${styles.document} ${styles.insightDocument}`}>
+      <header className={styles.documentHeader}>
+        <span className={styles.kind}>{summary.detail.kind.toUpperCase()}</span>
+        <h2>{summary.title}</h2>
+        <p className={styles.subtitle}>{ensureReportSentence(summary.subtitle)}</p>
+      </header>
+
+      <InsightStageCard
+        title="AS-IS"
+        description="분석으로 확인한 현재 상태입니다."
+        body={asIs}
+        codeTerms={codeTerms}
+      >
+        {supportingCharts.map((item, index) => (
+          <article key={`${item.heading}-${index}`} className={styles.insightChartCard}>
+            <h4>{item.heading}</h4>
+            <FindingCharts runId={runId} chartArtifactIds={item.chart_artifact_ids} />
+          </article>
+        ))}
+      </InsightStageCard>
+
+      <InsightStageCard
+        title="TO-BE"
+        description="이 결과가 가리키는 지향 방향입니다."
+        body=""
+        codeTerms={codeTerms}
+      >
+        <ol className={styles.insightActionList}>
+          {(toBeItems.length ? toBeItems : [toBe]).map((item, index) => (
+            <li key={index}>
+              <span>{index + 1}</span>
+              <p><RichText text={ensureReportSentence(item)} codeTerms={codeTerms} /></p>
+            </li>
+          ))}
+        </ol>
+      </InsightStageCard>
+
+      <InsightStageCard
+        title="ACTION"
+        description="목표 상태로 가기 위한 실행 제안입니다."
+        body=""
+        codeTerms={codeTerms}
+      >
+        <ol className={styles.insightActionList}>
+          {actionItems.map((item, index) => (
+            <li key={index}>
+              <span>{index + 1}</span>
+              <p><RichText text={ensureReportSentence(item)} codeTerms={codeTerms} /></p>
+            </li>
+          ))}
+        </ol>
+      </InsightStageCard>
+
+      {limitations.length ? (
+        <section className={`${styles.sqlSection} ${styles.cautionSection}`}>
+          <h3>주의사항</h3>
+          <ul className={`${styles.compactList} ${styles.sectionBody}`}>
+            {limitations.map((item, index) => (
+              <li key={index}><RichText text={ensureReportSentence(item)} codeTerms={codeTerms} /></li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
 function SummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
   if (summary.detail.kind === 'sql') {
     return <SqlSummaryDocument summary={summary} />;
@@ -1015,17 +1111,21 @@ function SummaryDocument({ summary, runId }: { summary: NodeSummary; runId: stri
     return <EdaSummaryDocument summary={summary} runId={runId} />;
   }
   if (summary.detail.kind === 'analysis') {
-    return <AnalysisSummaryDocument summary={summary} runId={runId} />;
+    return <AnalysisSummaryDocument summary={summary} />;
+  }
+  if (summary.detail.kind === 'insight') {
+    return <InsightSummaryDocument summary={summary} runId={runId} />;
   }
   const codeTerms = collectCodeTerms(summary);
   const hiddenKeys = new Set<string>(['handoff']);
   const detailEntries = Object.entries(summary.detail).filter(([key]) => (
     key !== 'kind' && !hiddenKeys.has(key)
   ));
+  const detailKind = String((summary.detail as Record<string, unknown>).kind ?? 'summary');
   return (
     <div className={styles.document}>
       <header className={styles.documentHeader}>
-        <span className={styles.kind}>{summary.detail.kind.toUpperCase()}</span>
+        <span className={styles.kind}>{detailKind.toUpperCase()}</span>
         <h2>{summary.title}</h2>
         <p className={styles.subtitle}>{summary.subtitle}</p>
       </header>
