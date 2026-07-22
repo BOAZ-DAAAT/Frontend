@@ -15,6 +15,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
+import { useState } from 'react';
 
 import { InlineNodeEditor } from '../node-editor';
 import type { PlaygroundNodeData, PlaygroundNodeKind } from '../types';
@@ -31,6 +32,7 @@ const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
 };
 
 export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>) {
+  const [isQueryOpen, setIsQueryOpen] = useState(false);
   const NodeIcon = NODE_ICONS[data.kind];
   const edges = useEdges();
   const targetConnections = useNodeConnections({ handleType: 'target' });
@@ -46,13 +48,36 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
   const canDeleteRun = Boolean(data.runId && data.onDeleteRun);
 
   return (
-    <div
-      className={`${styles.node} ${selected ? styles.nodeSelected : ''} ${
-        isFlowActive ? styles.nodeFlowActive : ''
-      } ${
-        hasActiveSource ? styles.nodeSourceConnected : ''
-      }`}
-    >
+    <div className={styles.wrapper}>
+      {data.queryLabel && data.queryText ? (
+        <button
+          type="button"
+          className={styles.queryBadge}
+          title={data.queryText}
+          aria-expanded={isQueryOpen}
+          aria-label={`${data.queryLabel} 전체 보기`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsQueryOpen((current) => !current);
+          }}
+        >
+          <span className={styles.queryBadgeLabel}>{data.queryLabel}</span>
+          <span className={styles.queryBadgeText}>{data.queryText}</span>
+        </button>
+      ) : null}
+      {data.queryLabel && data.queryText && isQueryOpen ? (
+        <div className={styles.queryPopover} role="dialog" aria-label={`${data.queryLabel} 전체 내용`}>
+          <div className={styles.queryPopoverLabel}>{data.queryLabel}</div>
+          <p className={styles.queryPopoverText}>{data.queryText}</p>
+        </div>
+      ) : null}
+      <div
+        className={`${styles.node} ${selected ? styles.nodeSelected : ''} ${
+          isFlowActive ? styles.nodeFlowActive : ''
+        } ${
+          hasActiveSource ? styles.nodeSourceConnected : ''
+        }`}
+      >
       <Handle
         type="target"
         position={Position.Left}
@@ -137,6 +162,7 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         isConnectable={false}
         className={styles.edgeAnchor}
       />
+      </div>
     </div>
   );
 }

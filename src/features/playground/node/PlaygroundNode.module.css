@@ -1,3 +1,101 @@
+.wrapper {
+  position: relative;
+  width: max-content;
+}
+
+.queryBadge {
+  position: absolute;
+  right: 0.25rem;
+  bottom: calc(100% + 0.5rem);
+  left: 0.25rem;
+  z-index: 4;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 58%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 84%),
+    0 10px 30px rgb(75 88 118 / 12%);
+  color: color-mix(in srgb, var(--color-brand-primary) 76%, transparent);
+  backdrop-filter: blur(14px) saturate(142%);
+  -webkit-backdrop-filter: blur(14px) saturate(142%);
+  font: inherit;
+  text-align: left;
+  pointer-events: auto;
+  cursor: pointer;
+  appearance: none;
+}
+
+.queryBadge:hover,
+.queryBadge:focus-visible {
+  background: rgb(255 255 255 / 74%);
+  outline: none;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 90%),
+    0 12px 34px rgb(75 88 118 / 16%);
+}
+
+.queryBadgeLabel {
+  flex: 0 0 auto;
+  font-size: 0.6875rem;
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--color-brand-primary) 90%, transparent);
+}
+
+.queryBadgeText {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.6875rem;
+  font-weight: var(--font-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--color-brand-primary) 62%, transparent);
+}
+
+.queryPopover {
+  position: absolute;
+  right: 0.25rem;
+  bottom: calc(100% + 2.75rem);
+  left: 0.25rem;
+  z-index: 8;
+  box-sizing: border-box;
+  max-height: 9rem;
+  overflow-y: auto;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 0.875rem;
+  background: rgb(255 255 255 / 86%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 92%),
+    0 18px 44px rgb(55 65 92 / 22%);
+  color: var(--color-brand-primary);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  pointer-events: auto;
+}
+
+.queryPopoverLabel {
+  margin-bottom: 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: var(--font-semibold);
+  color: color-mix(in srgb, var(--color-brand-primary) 76%, transparent);
+}
+
+.queryPopoverText {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: var(--font-medium);
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--color-brand-primary) 72%, transparent);
+  white-space: normal;
+  word-break: keep-all;
+}
+
 .node {
   position: relative;
   display: flex;

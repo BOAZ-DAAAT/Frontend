@@ -1,0 +1,63 @@
+import type { Edge, Node } from '@xyflow/react';
+
+import type { PlaygroundNodeData } from './types';
+
+const GRAPH_STORAGE_KEY = 'daaat.playgroundGraph.v1';
+
+type StoredGraph = {
+  nodes: Node<PlaygroundNodeData>[];
+  edges: Edge[];
+};
+
+function sanitizeNodes(nodes: Node<PlaygroundNodeData>[]): Node<PlaygroundNodeData>[] {
+  return nodes.map((node) => ({
+    ...node,
+    data: {
+      ...node.data,
+      onDeleteRun: undefined,
+    },
+  }));
+}
+
+export function getStoredPlaygroundGraph(
+  fallbackNodes: Node<PlaygroundNodeData>[],
+  fallbackEdges: Edge[],
+): StoredGraph {
+  try {
+    const raw = localStorage.getItem(GRAPH_STORAGE_KEY);
+    if (!raw) return { nodes: fallbackNodes, edges: fallbackEdges };
+    const parsed = JSON.parse(raw) as Partial<StoredGraph>;
+    if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+      return { nodes: fallbackNodes, edges: fallbackEdges };
+    }
+    return {
+      nodes: parsed.nodes as Node<PlaygroundNodeData>[],
+      edges: parsed.edges as Edge[],
+    };
+  } catch {
+    return { nodes: fallbackNodes, edges: fallbackEdges };
+  }
+}
+
+export function setStoredPlaygroundGraph(
+  nodes: Node<PlaygroundNodeData>[],
+  edges: Edge[],
+): void {
+  try {
+    const payload: StoredGraph = {
+      nodes: sanitizeNodes(nodes),
+      edges,
+    };
+    localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore storage failures and keep the in-memory graph usable.
+  }
+}
+
+export function clearStoredPlaygroundGraph(): void {
+  try {
+    localStorage.removeItem(GRAPH_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
