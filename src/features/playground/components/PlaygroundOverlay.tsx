@@ -3,7 +3,9 @@ import { LoaderCircle, Trash2 } from 'lucide-react';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-editor';
 import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummaryPanel';
+import { GeneratedReportPanel } from '@/features/playground/report/GeneratedReportPanel';
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
+import type { AgentNodeReportResponse } from '@/features/playground/report/types';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import { SessionConnectPanel } from '@/features/session/connect/SessionConnectPanel';
@@ -49,6 +51,10 @@ interface PlaygroundOverlayProps {
   nodeSummaryError: string | null;
   isNodeSummaryLoading: boolean;
   onCloseNodeSummary: () => void;
+  generatedReport: AgentNodeReportResponse | null;
+  generatedReportError: string | null;
+  isGeneratingReport: boolean;
+  onCloseGeneratedReport: () => void;
   onBranchPromptSend: (prompt: string) => Promise<void>;
   canDeleteAllNodes: boolean;
   isDeletingAllNodes: boolean;
@@ -77,6 +83,10 @@ export function PlaygroundOverlay({
   nodeSummaryError,
   isNodeSummaryLoading,
   onCloseNodeSummary,
+  generatedReport,
+  generatedReportError,
+  isGeneratingReport,
+  onCloseGeneratedReport,
   onBranchPromptSend,
   canDeleteAllNodes,
   isDeletingAllNodes,
@@ -102,6 +112,15 @@ export function PlaygroundOverlay({
       {!isSessionView ? <div className={styles.nodeCreatorDock}><NodeCreator onCreate={onCreateNode} /></div> : null}
 
       {!isSessionView && isReportWorkspaceOpen ? <ReportWorkspace /> : null}
+
+      {!isSessionView && (generatedReport || generatedReportError || isGeneratingReport) ? (
+        <GeneratedReportPanel
+          data={generatedReport}
+          error={generatedReportError}
+          isLoading={isGeneratingReport}
+          onClose={onCloseGeneratedReport}
+        />
+      ) : null}
 
       {!isSessionView && preview ? (
         <TablePreviewPanel
