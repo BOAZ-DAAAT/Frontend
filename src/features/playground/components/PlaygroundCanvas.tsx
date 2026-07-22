@@ -292,7 +292,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }
   }, [runStreamError, run]);
 
-  const { collapse } = useSidebar();
+  const { collapse, view } = useSidebar();
+  const isSessionView = view === 'sessions';
   const isRunActive = Boolean(
     activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
   );
@@ -665,20 +666,22 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
   return (
     <div className={styles.canvas}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeClick={handleNodeClick}
-        onEdgeClick={handleEdgeClick}
-        onPaneClick={handlePaneClick}
-        selectNodesOnDrag={false}
-        fitView
-      >
-      </ReactFlow>
+      {!isSessionView ? (
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={handleNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeClick={handleNodeClick}
+          onEdgeClick={handleEdgeClick}
+          onPaneClick={handlePaneClick}
+          selectNodesOnDrag={false}
+          fitView
+        >
+        </ReactFlow>
+      ) : null}
 
       <PlaygroundOverlay
         isGenerating={isGenerating}

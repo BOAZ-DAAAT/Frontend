@@ -19,6 +19,29 @@
   border: 0;
   background: rgb(255 255 255 / 70%);
   box-shadow: 0 4px 40px rgb(0 0 0 / 5%);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.card:hover,
+.currentCard {
+  background: rgb(255 255 255 / 86%);
+  box-shadow: 0 0.5rem 1.75rem rgb(75 88 118 / 12%);
+}
+
+.card:hover {
+  transform: translateY(-1px);
+}
+
+.card:focus-visible,
+.addButton:focus-visible {
+  outline: 2px solid rgb(52 52 52 / 50%);
+  outline-offset: 0.1875rem;
 }
 
 .details {
@@ -153,6 +176,19 @@
 .addButton svg {
   width: 1.125rem;
   height: 1.125rem;
+}
+
+.status,
+.error {
+  margin: 0;
+  padding: 0.75rem;
+  color: #7f7f7f;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+
+.error {
+  color: #b42318;
 }
 
 @keyframes sessionContentReveal {

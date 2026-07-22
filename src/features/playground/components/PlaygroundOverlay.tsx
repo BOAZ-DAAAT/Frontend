@@ -6,6 +6,7 @@ import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummary
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
+import { SessionConnectPanel } from '@/features/session/connect/SessionConnectPanel';
 import type { PlaygroundNodeKind } from '@/features/playground/types';
 import type { NodeSummary } from '@/features/playground/node-summary/types';
 import { TablePreviewPanel } from '@/features/playground/table-preview/TablePreviewPanel';
@@ -85,37 +86,32 @@ export function PlaygroundOverlay({
   onClosePreview,
   onCreateNode,
 }: PlaygroundOverlayProps) {
-  const { activeSection, view } = useSidebar();
+  const { activeSection, closeSessionCreate, selectSession, sessionPane, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
+  const isSessionView = view === 'sessions';
 
   return (
     // 캔버스 전체를 덮되, 클릭은 통과시키고(overlay: pointer-events none)
     // 실제 UI 요소(dock)에서만 클릭을 받는다(pointer-events auto)
     <div className={styles.overlay}>
       {/* 상단 중앙 고정: 툴바 */}
-      <div className={styles.toolbarDock}>
-        <Toolbar />
-      </div>
+      {!isSessionView ? <div className={styles.toolbarDock}><Toolbar /></div> : null}
 
-      <div className={styles.accountDock}>
-        <AccountStack />
-      </div>
+      {!isSessionView ? <div className={styles.accountDock}><AccountStack /></div> : null}
 
-      <div className={styles.nodeCreatorDock}>
-        <NodeCreator onCreate={onCreateNode} />
-      </div>
+      {!isSessionView ? <div className={styles.nodeCreatorDock}><NodeCreator onCreate={onCreateNode} /></div> : null}
 
-      {isReportWorkspaceOpen && <ReportWorkspace />}
+      {!isSessionView && isReportWorkspaceOpen ? <ReportWorkspace /> : null}
 
-      {preview && (
+      {!isSessionView && preview ? (
         <TablePreviewPanel
           sessionId={preview.sessionId}
           table={preview.table}
           onClose={onClosePreview}
         />
-      )}
+      ) : null}
 
-      {nodeSummary && (
+      {!isSessionView && nodeSummary ? (
         <NodeSummaryPanel
           node={nodeSummary}
           summary={nodeSummaryData}
@@ -125,14 +121,20 @@ export function PlaygroundOverlay({
           onClose={onCloseNodeSummary}
           onBranchPromptSend={onBranchPromptSend}
         />
-      )}
+      ) : null}
 
       {/* 좌상단 고정: 사이드바 */}
       <div className={styles.sidebarDock}>
         <Sidebar />
       </div>
 
-      <div className={styles.deleteDock}>
+      {isSessionView && sessionPane === 'create' ? (
+        <div className={styles.sessionConnectDock}>
+          <SessionConnectPanel onClose={closeSessionCreate} onSessionCreated={selectSession} />
+        </div>
+      ) : null}
+
+      {!isSessionView ? <div className={styles.deleteDock}>
         {deleteAllNodesError ? (
           <p className={styles.deleteError} role="alert">{deleteAllNodesError}</p>
         ) : null}
@@ -148,10 +150,10 @@ export function PlaygroundOverlay({
             ? <LoaderCircle className={styles.deleteSpinner} aria-hidden="true" />
             : <Trash2 aria-hidden="true" />}
         </button>
-      </div>
+      </div> : null}
 
       {/* 하단 중앙 고정: 프롬프트 컴포저 */}
-      <div className={`${styles.dock} ${nodeSummary ? styles.dockHidden : ''}`}>
+      {!isSessionView ? <div className={`${styles.dock} ${nodeSummary ? styles.dockHidden : ''}`}>
         <PromptComposer
           isGenerating={isGenerating}
           onSend={onPromptSend}
@@ -165,7 +167,7 @@ export function PlaygroundOverlay({
           approvalError={approvalError}
           onApprovalDecision={onApprovalDecision}
         />
-      </div>
+      </div> : null}
     </div>
   );
 }
