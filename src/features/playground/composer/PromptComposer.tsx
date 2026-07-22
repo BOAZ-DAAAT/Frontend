@@ -1,4 +1,5 @@
-import { MessageCircleQuestion } from 'lucide-react';
+import { Check, MessageCircleQuestion, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 
@@ -11,6 +12,11 @@ interface PromptComposerProps {
     eventId: string | null;
     agentName: string;
     question: string;
+  } | null;
+  analysisReview: {
+    eventId: string | null;
+    agentName: string;
+    content: string;
   } | null;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
@@ -53,6 +59,7 @@ export function PromptComposer({
   isGenerating,
   onSend,
   clarification,
+  analysisReview,
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
@@ -62,6 +69,12 @@ export function PromptComposer({
   onApprovalDecision,
 }: PromptComposerProps) {
   const { ref, resize } = useAutoResizeTextarea(5);
+  const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null);
+
+  useEffect(() => {
+    setReviewDecision(null);
+  }, [analysisReview?.eventId]);
+
   const handleSend = async () => {
     const prompt = ref.current?.value.trim();
 
@@ -98,7 +111,7 @@ export function PromptComposer({
 
   return (
     <div
-      className={`${styles.composer} ${isGenerating ? styles.generating : ''} ${clarification || approval ? styles.composerClarification : ''
+      className={`${styles.composer} ${isGenerating ? styles.generating : ''} ${clarification || approval ? styles.composerClarification : ''} ${analysisReview ? styles.composerReview : ''
         }`}
     >
       {clarification ? (
@@ -148,13 +161,44 @@ export function PromptComposer({
         </section>
       ) : null}
 
+      {analysisReview ? (
+        <section className={styles.reviewPanel} aria-label="분석 결과 검토">
+          <div className={styles.reviewMeta}>
+            <span>{analysisReview.agentName}</span>
+          </div>
+          <p className={styles.reviewContent}>{analysisReview.content}</p>
+          <div className={styles.reviewActions}>
+            <button
+              type="button"
+              className={`${styles.reviewButton} ${styles.reviewConfirm} ${reviewDecision === 'approved' ? styles.reviewButtonSelected : ''}`}
+              onClick={() => setReviewDecision('approved')}
+              aria-pressed={reviewDecision === 'approved'}
+            >
+              <Check aria-hidden />
+              확인
+            </button>
+            <button
+              type="button"
+              className={`${styles.reviewButton} ${styles.reviewReject} ${reviewDecision === 'rejected' ? styles.reviewButtonSelected : ''}`}
+              onClick={() => setReviewDecision('rejected')}
+              aria-pressed={reviewDecision === 'rejected'}
+            >
+              <X aria-hidden />
+              거부
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <div className={styles.content}>
         <textarea
           ref={ref}
           onInput={resize}
           onKeyDown={handleKeyDown}
           rows={1}
-          placeholder={isSubmittingClarification
+          placeholder={analysisReview
+            ? '분석 검토를 기다리고 있습니다'
+            : isSubmittingClarification
             ? '답변을 전송하고 있습니다'
             : approval
               ? '위 승인/거부 버튼으로 응답해 주세요'
@@ -162,7 +206,7 @@ export function PromptComposer({
                 ? '답변을 입력해 주세요'
                 : '프롬프트를 입력해 주세요'}
           className={`${styles.textarea} ${styles.input}`}
-          disabled={isSubmittingClarification || Boolean(approval)}
+          disabled={isSubmittingClarification || Boolean(approval) || Boolean(analysisReview)}
           aria-describedby={clarificationError ? 'clarification-error' : undefined}
         />
 
@@ -173,7 +217,7 @@ export function PromptComposer({
         ) : null}
 
         <div className={styles.actions}>
-          <button type="button" aria-label="추가" className={styles.iconButton} disabled={Boolean(approval)}>
+          <button type="button" aria-label="추가" className={styles.iconButton} disabled={Boolean(approval) || Boolean(analysisReview)}>
             <PlusIcon />
           </button>
 
@@ -182,7 +226,7 @@ export function PromptComposer({
             aria-label={clarification ? '답변 전송' : '전송'}
             className={`${styles.iconButton} ${styles.sendButton}`}
             onClick={() => void handleSend()}
-            disabled={isSubmittingClarification || Boolean(approval) || (isGenerating && !clarification)}
+            disabled={isSubmittingClarification || Boolean(approval) || Boolean(analysisReview) || (isGenerating && !clarification)}
             aria-busy={isSubmittingClarification}
           >
             <SendIcon />

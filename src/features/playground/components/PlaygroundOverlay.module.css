@@ -41,6 +41,70 @@
   pointer-events: auto;
 }
 
+.deleteDock {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  pointer-events: auto;
+}
+
+.deleteButton {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgb(152 52 52 / 25%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 72%);
+  color: #983434;
+  box-shadow: 0 0.25rem 1.25rem rgb(0 0 0 / 8%);
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.deleteButton:hover:not(:disabled) {
+  background: #fff;
+}
+
+.deleteButton:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.deleteButton svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.deleteError {
+  max-width: 18rem;
+  margin: 0;
+  color: #983434;
+  font-size: var(--text-sm);
+}
+
+.deleteSpinner {
+  animation: deleteSpin 800ms linear infinite;
+}
+
+@keyframes deleteSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .deleteSpinner {
+    animation: none;
+  }
+}
+
 .dock {
   position: absolute;
   bottom: 1.5rem;

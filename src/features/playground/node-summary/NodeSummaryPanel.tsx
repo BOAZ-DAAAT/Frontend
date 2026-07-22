@@ -1,3 +1,13 @@
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
+
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import {
   AlertCircle,
@@ -12,7 +22,6 @@ import {
 import { ReportCard } from '@/features/playground/report/ReportCard';
 import type { Report } from '@/features/playground/report/reportData';
 import type { PlaygroundNodeKind } from '@/features/playground/types';
-import { useEffect, useState, type ReactNode } from 'react';
 
 import { getAgentRunArtifactContent } from './api';
 import type { NodeSummary, NodeSummaryAnalysisItem, NodeSummaryFinding } from './types';
@@ -40,6 +49,10 @@ const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
   'analysis-agent': ScanSearch,
   'insight-agent': Lightbulb,
 };
+
+const MIN_PANEL_WIDTH = 640;
+const SIDEBAR_CLEARANCE = 280;
+const PANEL_RIGHT_GUTTER = 24;
 
 const DETAIL_LABELS: Record<string, string> = {
   source_tables: '원본 테이블',
@@ -1091,6 +1104,9 @@ export function NodeSummaryPanel({
   onClose,
   onBranchPromptSend,
 }: NodeSummaryPanelProps) {
+  const panelRef = useRef<HTMLElement>(null);
+  const resizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
+  const [panelWidth, setPanelWidth] = useState(MIN_PANEL_WIDTH);
   const NodeIcon = NODE_ICONS[node.kind];
   const report: Report = {
     id: `node-summary-${node.id}`,
@@ -1100,8 +1116,79 @@ export function NodeSummaryPanel({
     markdown: '',
   };
 
+  useEffect(() => {
+    const handlePointerMove = (event: globalThis.PointerEvent) => {
+      const resizeStart = resizeStartRef.current;
+      if (!resizeStart) return;
+
+      const maxWidth = Math.max(
+        MIN_PANEL_WIDTH,
+        window.innerWidth - SIDEBAR_CLEARANCE - PANEL_RIGHT_GUTTER,
+      );
+      const nextWidth = resizeStart.width + resizeStart.clientX - event.clientX;
+      setPanelWidth(Math.min(Math.max(nextWidth, MIN_PANEL_WIDTH), maxWidth));
+    };
+
+    const handlePointerUp = () => {
+      resizeStartRef.current = null;
+      document.body.style.cursor = '';
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, []);
+
+  const handleResizeStart = (event: PointerEvent<HTMLDivElement>) => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    resizeStartRef.current = {
+      clientX: event.clientX,
+      width: panel.getBoundingClientRect().width,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.style.cursor = 'col-resize';
+  };
+
+  const handleResizeKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+    event.preventDefault();
+    const direction = event.key === 'ArrowLeft' ? 1 : -1;
+    const maxWidth = Math.max(
+      MIN_PANEL_WIDTH,
+      window.innerWidth - SIDEBAR_CLEARANCE - PANEL_RIGHT_GUTTER,
+    );
+    setPanelWidth((currentWidth) => Math.min(
+      Math.max(currentWidth + direction * 32, MIN_PANEL_WIDTH),
+      maxWidth,
+    ));
+  };
+
+  const panelStyle = {
+    '--summary-width': `${panelWidth}px`,
+  } as CSSProperties;
+
   return (
-    <aside className={styles.panel} aria-label={`${node.label} 서머리`}>
+    <aside
+      ref={panelRef}
+      className={styles.panel}
+      style={panelStyle}
+      aria-label={`${node.label} 서머리`}
+    >
+      <div
+        className={styles.resizeHandle}
+        role="separator"
+        aria-label="서머리 패널 너비 조절"
+        aria-orientation="vertical"
+        tabIndex={0}
+        onPointerDown={handleResizeStart}
+        onKeyDown={handleResizeKeyDown}
+      />
       <ReportCard
         report={report}
         variant="detail"
@@ -1120,6 +1207,7 @@ export function NodeSummaryPanel({
                 isGenerating={false}
                 onSend={onBranchPromptSend}
                 clarification={null}
+                analysisReview={null}
                 isSubmittingClarification={false}
                 clarificationError={null}
                 onClarificationSend={async () => undefined}

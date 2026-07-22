@@ -1,4 +1,5 @@
 import { AccountStack } from '@/features/playground/account/AccountStack';
+import { LoaderCircle, Trash2 } from 'lucide-react';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-editor';
 import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummaryPanel';
@@ -19,6 +20,11 @@ interface PlaygroundOverlayProps {
     eventId: string | null;
     agentName: string;
     question: string;
+  } | null;
+  analysisReview: {
+    eventId: string | null;
+    agentName: string;
+    content: string;
   } | null;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
@@ -43,6 +49,10 @@ interface PlaygroundOverlayProps {
   isNodeSummaryLoading: boolean;
   onCloseNodeSummary: () => void;
   onBranchPromptSend: (prompt: string) => Promise<void>;
+  canDeleteAllNodes: boolean;
+  isDeletingAllNodes: boolean;
+  deleteAllNodesError: string | null;
+  onDeleteAllNodes: () => Promise<void>;
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
   onCreateNode: (kind: CreatableNodeKind) => void;
@@ -52,6 +62,7 @@ export function PlaygroundOverlay({
   isGenerating,
   onPromptSend,
   clarification,
+  analysisReview,
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
@@ -66,6 +77,10 @@ export function PlaygroundOverlay({
   isNodeSummaryLoading,
   onCloseNodeSummary,
   onBranchPromptSend,
+  canDeleteAllNodes,
+  isDeletingAllNodes,
+  deleteAllNodesError,
+  onDeleteAllNodes,
   preview,
   onClosePreview,
   onCreateNode,
@@ -117,12 +132,31 @@ export function PlaygroundOverlay({
         <Sidebar />
       </div>
 
+      <div className={styles.deleteDock}>
+        {deleteAllNodesError ? (
+          <p className={styles.deleteError} role="alert">{deleteAllNodesError}</p>
+        ) : null}
+        <button
+          type="button"
+          className={styles.deleteButton}
+          onClick={() => void onDeleteAllNodes()}
+          disabled={!canDeleteAllNodes}
+          aria-label="모든 노드와 관련 데이터 삭제"
+          title="모든 노드와 관련 데이터 삭제"
+        >
+          {isDeletingAllNodes
+            ? <LoaderCircle className={styles.deleteSpinner} aria-hidden="true" />
+            : <Trash2 aria-hidden="true" />}
+        </button>
+      </div>
+
       {/* 하단 중앙 고정: 프롬프트 컴포저 */}
       <div className={`${styles.dock} ${nodeSummary ? styles.dockHidden : ''}`}>
         <PromptComposer
           isGenerating={isGenerating}
           onSend={onPromptSend}
           clarification={clarification}
+          analysisReview={analysisReview}
           isSubmittingClarification={isSubmittingClarification}
           clarificationError={clarificationError}
           onClarificationSend={onClarificationSend}
