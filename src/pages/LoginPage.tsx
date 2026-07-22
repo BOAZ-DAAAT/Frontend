@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { LockKeyhole, UserRound } from 'lucide-react';
 
+import daaatLogo from '@/assets/daaat-logo.svg';
 import { useAuth } from '@/features/auth/AuthContext';
+
+import { BlobOrb } from './BlobPage';
+import styles from './LoginPage.module.css';
 
 export function LoginPage() {
     const navigate = useNavigate();
@@ -30,32 +35,80 @@ export function LoginPage() {
         }
     };
 
-    // ConnectPage와 동일한 인풋 스타일 — 화면 톤 통일
-    const inputClass =
-        'mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-brand-500';
-
     return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
-            <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-                <h1 className="text-lg font-semibold text-white">DAAAT 로그인</h1>
-                <div className="mt-6 space-y-4">
-                    <label className="block">
-                        <span className="text-sm text-slate-300">아이디</span>
-                        <input className={inputClass} value={username} autoFocus
-                            onChange={(e) => setUsername(e.target.value)} />
-                    </label>
-                    <label className="block">
-                        <span className="text-sm text-slate-300">비밀번호</span>
-                        <input className={inputClass} type="password" value={password}
-                            onChange={(e) => setPassword(e.target.value)} />
-                    </label>
-                    <button type="submit" disabled={loading || !username || !password}
-                        className="w-full rounded-xl bg-brand-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
-                        {loading ? '로그인 중...' : '로그인'}
-                    </button>
+        <main className={styles.page}>
+            <div className={styles.backgroundLayer} aria-hidden />
+
+            <div className={styles.loginLayer}>
+                <form onSubmit={handleSubmit} className={styles.panel}>
+                    <div className={styles.surface}>
+                        <header className={styles.intro}>
+                            <h1 className={styles.visuallyHidden}>DAAAT</h1>
+                            <img className={styles.brandLogo} src={daaatLogo} alt="DAAAT" />
+                        </header>
+
+                        <div className={styles.fields}>
+                            <div className={styles.field}>
+                                <div className={styles.inputWrap}>
+                                    <UserRound aria-hidden />
+                                    <input
+                                        value={username}
+                                        autoFocus
+                                        autoComplete="username"
+                                        aria-label="아이디"
+                                        placeholder="ID"
+                                        onChange={(event) => setUsername(event.target.value)}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className={styles.field}>
+                                <div className={styles.inputWrap}>
+                                    <LockKeyhole aria-hidden />
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        autoComplete="current-password"
+                                        aria-label="비밀번호"
+                                        placeholder="Password"
+                                        onChange={(event) => setPassword(event.target.value)}
+                                    />
+                                    <button type="button" className={styles.forgotButton}>
+                                        비밀번호 찾기
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {error ? <p className={styles.error} role="alert">{error}</p> : null}
+
+                        <button
+                            type="submit"
+                            className={styles.submitButton}
+                        >
+                            <span>{loading ? '로그인 중...' : '로그인'}</span>
+                        </button>
+
+                        <p className={styles.signupPrompt}>
+                            <span>계정이 없으신가요?</span>
+                            <button type="button" className={styles.textButton}>회원가입</button>
+                        </p>
+                    </div>
+                </form>
+
+                <div className={styles.visualFrame} aria-hidden>
+                    <div className={styles.visualPanel}>
+                        <div className={styles.blobStage}>
+                            <BlobOrb
+                                active={false}
+                                motion={0.48}
+                                speed={0.42}
+                                label="잔잔하고 느리게 흐르는 컬러 유체 블롭"
+                            />
+                        </div>
+                    </div>
                 </div>
-                {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
-            </form>
+            </div>
         </main>
     );
 }
