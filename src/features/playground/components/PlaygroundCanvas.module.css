@@ -1,19 +1,57 @@
 .canvas {
+  --mist-blue: #b8cbd9;
+  --ice-blue: #d9dde2;
+
   position: relative;
   isolation: isolate;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  background-color: var(--mist-blue);
   background:
-    radial-gradient(circle at 50% 92%,
-      #bdcbe0 0%,
-      #cfdaea 28%,
-      #e2ebf5 52%,
-      #f3f8fd 76%,
-      #ffffff 100%);
+    radial-gradient(ellipse 62% 58% at 74% 58%,
+      rgb(232 203 198 / 76%) 0%,
+      rgb(232 203 198 / 24%) 34%,
+      transparent 68%),
+    radial-gradient(ellipse 70% 64% at 12% 76%,
+      rgb(169 187 208 / 68%) 0%,
+      rgb(169 187 208 / 18%) 52%,
+      transparent 76%),
+    radial-gradient(ellipse 96% 48% at 50% 108%,
+      rgb(169 187 208 / 88%) 0%,
+      rgb(184 203 217 / 42%) 50%,
+      transparent 82%),
+    linear-gradient(165deg,
+      #a9c2d5 0%,
+      var(--mist-blue) 32%,
+      var(--ice-blue) 69%,
+      #b4c2d3 100%);
 }
 
-.canvas> :global(.react-flow) {
+.canvas::before,
+.canvas::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: '';
+  pointer-events: none;
+}
+
+.canvas::before {
+  inset: -10%;
+  background:
+    radial-gradient(circle at 78% 55%, rgb(238 210 203 / 36%), transparent 24%),
+    radial-gradient(circle at 38% 24%, rgb(238 241 243 / 25%), transparent 34%);
+  filter: blur(30px);
+}
+
+.canvas::after {
+  background:
+    radial-gradient(ellipse at center, transparent 52%, rgb(103 130 157 / 12%) 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 5%), transparent 36%, rgb(124 145 174 / 7%));
+}
+
+.canvas > :global(.react-flow) {
   position: relative;
   z-index: 1;
   background: transparent;
