@@ -88,6 +88,12 @@ type Approval = {
   reason: string;
 };
 
+type AnalysisReview = {
+  eventId: string | null;
+  agentName: string;
+  content: string;
+};
+
 type SelectedNodeSummary = {
   id: string;
   runId: string | null;
@@ -171,6 +177,39 @@ function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | nul
   return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
 }
 
+function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): AnalysisReview | null {
+  let reviewEvent: RunEvent | null = null;
+
+  for (const event of events) {
+    if (interruptType(event.metadata) !== 'analysis_review') continue;
+
+    if (['approval.required', 'analysis_review.required', 'human_input.required'].includes(event.event_type)) {
+      reviewEvent = event;
+    }
+    if (['approval.resolved', 'analysis_review.resolved', 'human_input.resumed'].includes(event.event_type)) {
+      reviewEvent = null;
+    }
+  }
+
+  if (!reviewEvent && (
+    run?.status !== 'waiting_approval'
+    || interruptType(run.metadata) !== 'analysis_review'
+  )) return null;
+
+  const content = metadataString(reviewEvent?.metadata, 'answer')
+    ?? metadataString(reviewEvent?.metadata, 'content')
+    ?? metadataString(reviewEvent?.metadata, 'review')
+    ?? reviewEvent?.message
+    ?? metadataString(run?.metadata, 'answer')
+    ?? '분석 결과를 검토한 뒤 진행 여부를 선택해 주세요.';
+  const agentName = metadataString(reviewEvent?.metadata, 'agent_name')
+    ?? reviewEvent?.node_name
+    ?? metadataString(run?.metadata, 'node')
+    ?? 'Analysis Agent';
+
+  return { eventId: reviewEvent?.event_id ?? null, agentName, content };
+}
+
 function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
   const byId = new Map(previous.map((event) => [event.event_id, event]));
   for (const event of next) {
@@ -198,6 +237,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const laneOffsetByRunId = useRef(new Map<string, PositionOffset>());
 
   const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
+  const [isDeletingNodes, setIsDeletingNodes] = useState(false);
+  const [deleteNodesError, setDeleteNodesError] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
   const [isSubmittingClarification, setIsSubmittingClarification] = useState(false);
   const [clarificationError, setClarificationError] = useState<string | null>(null);
@@ -258,6 +299,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const isGenerating = isStartingRun || isRunActive;
   const clarification = useMemo(() => getClarification(run, visibleEvents), [visibleEvents, run]);
   const approval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
+  const analysisReview = useMemo(() => getAnalysisReview(run, visibleEvents), [visibleEvents, run]);
+  const hasDeletableNodes = nodes.some((node) => node.id !== 'datasource');
 
   const handleNodesChange = (changes: NodeChange<Node<PlaygroundNodeData>>[]) => {
     setNodes((currentNodes) => {
@@ -588,6 +631,33 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }
   };
 
+  const handleDeleteAllNodes = async () => {
+    if (isGenerating || isDeletingNodes || !hasDeletableNodes) return;
+    const confirmed = window.confirm(
+      '현재 실행의 모든 노드와 서머리 데이터를 영구적으로 삭제할까요?',
+    );
+    if (!confirmed) return;
+
+    setIsDeletingNodes(true);
+    setDeleteNodesError(null);
+    try {
+      if (activeRunId) await deleteAgentRun(activeRunId);
+      clearStoredActiveRunId();
+      setActiveRunId(null);
+      setVisibleEvents([]);
+      setSelectedNodeSummary(null);
+      setNodes(initialGraph.nodes);
+      setEdges(initialGraph.edges);
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '노드 데이터를 삭제하지 못했습니다.';
+      setDeleteNodesError(message);
+    } finally {
+      setIsDeletingNodes(false);
+    }
+  };
+
   const handlePaneClick = () => {
     setSelectedNodeSummary(null);
     collapse();
@@ -614,6 +684,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         isGenerating={isGenerating}
         onPromptSend={handlePromptSend}
         clarification={clarification}
+        analysisReview={analysisReview}
         isSubmittingClarification={isSubmittingClarification}
         clarificationError={clarificationError}
         onClarificationSend={handleClarificationSend}
@@ -628,6 +699,10 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         isNodeSummaryLoading={nodeSummaryRequest.isLoading}
         onCloseNodeSummary={() => setSelectedNodeSummary(null)}
         onBranchPromptSend={handleBranchPromptSend}
+        canDeleteAllNodes={hasDeletableNodes && !isGenerating && !isDeletingNodes}
+        isDeletingAllNodes={isDeletingNodes}
+        deleteAllNodesError={deleteNodesError}
+        onDeleteAllNodes={handleDeleteAllNodes}
         preview={preview}
         onClosePreview={onClosePreview}
         onCreateNode={handleCreateNode}

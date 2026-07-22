@@ -27,6 +27,12 @@ export type AgentRunBranchResponse = {
   source_run_id: string;
 };
 
+export type AgentRunDeleteResponse = {
+  run_id: string;
+  deleted_event_count: number;
+  deleted_artifact_count: number;
+};
+
 export function createAgentRun(sessionId: string, query: string) {
   return apiClient.post<AgentRunResponse>('/agent-runs', {
     session_id: sessionId,
@@ -39,11 +45,7 @@ export function getAgentRun(runId: string) {
 }
 
 export function deleteAgentRun(runId: string) {
-  return apiClient.delete<{
-    run_id: string;
-    deleted_event_count: number;
-    deleted_artifact_count: number;
-  }>(`/agent-runs/${encodeURIComponent(runId)}`);
+  return apiClient.delete<AgentRunDeleteResponse>(`/agent-runs/${encodeURIComponent(runId)}`);
 }
 
 export function listAgentRunEvents(runId: string) {
