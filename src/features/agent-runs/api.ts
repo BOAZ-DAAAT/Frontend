@@ -56,6 +56,12 @@ export function listAgentRunRelatedEvents(runId: string) {
   return apiClient.get<RunEvent[]>(`/agent-runs/${encodeURIComponent(runId)}/related-events`);
 }
 
+export function listAgentSessionEvents(sessionId: string) {
+  return apiClient.get<RunEvent[]>(
+    `/agent-runs/session-events?session_id=${encodeURIComponent(sessionId)}`,
+  );
+}
+
 export function resumeAgentRun(runId: string, answer: string) {
   return apiClient.post<AgentRunResumeResponse>(
     `/agent-runs/${encodeURIComponent(runId)}/resume`,
@@ -77,12 +83,18 @@ export function resumeAgentRunApproval(runId: string, approved: boolean, reason?
   );
 }
 
-export function branchAgentRun(runId: string, startStage: BranchStage, instruction: string) {
+export function branchAgentRun(
+  runId: string,
+  startStage: BranchStage,
+  instruction: string,
+  parentNodeId?: string | null,
+) {
   return apiClient.post<AgentRunBranchResponse>(
     `/agent-runs/${encodeURIComponent(runId)}/branch`,
     {
       start_stage: startStage,
       instruction,
+      ...(parentNodeId ? { parent_node_id: parentNodeId } : {}),
     },
   );
 }

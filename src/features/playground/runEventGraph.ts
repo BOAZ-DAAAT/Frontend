@@ -159,6 +159,14 @@ export function deriveNodeGraphFromEvents(
   const laneByRunId = new Map<string, number>();
   const firstNodeIdByRunId = new Map<string, string>();
   const positionedNodes: RuntimeNode[] = [];
+  // parentNodeId가 없는(=분기가 아니라 새 메인 쿼리로 시작한) run만 자기 Data Source를 갖는다.
+  const mainRunIds: string[] = [];
+  const seenMainRunIds = new Set<string>();
+  for (const node of orderedRuntimeNodes) {
+    if (node.data.parentNodeId !== null || !node.data.runId || seenMainRunIds.has(node.data.runId)) continue;
+    seenMainRunIds.add(node.data.runId);
+    mainRunIds.push(node.data.runId);
+  }
 
   for (const node of orderedRuntimeNodes) {
     const runId = node.data.runId ?? node.id;
@@ -187,13 +195,36 @@ export function deriveNodeGraphFromEvents(
   }
 
   const executionNodes = positionedNodes;
-  const nodes = datasource ? [datasource, ...executionNodes] : executionNodes;
+  // 메인 쿼리로 시작한 run마다(분기 제외) 자기 Data Source 노드를 하나씩 둔다.
+  const datasourceNodes: Node<PlaygroundNodeData>[] = datasource
+    ? (mainRunIds.length > 0
+        ? mainRunIds.map((runId) => ({
+            ...datasource,
+            id: `datasource:${runId}`,
+            position: { x: 0, y: LANE_Y_START + (laneByRunId.get(runId) ?? 0) * LANE_Y_GAP },
+            data: { ...datasource.data, runId },
+          }))
+        : [datasource])
+    : [];
+  const nodes = [...datasourceNodes, ...executionNodes];
   const visibleIds = new Set(nodes.map((node) => node.id));
+  const runIdByNodeId = new Map(executionNodes.map((node) => [node.id, node.data.runId]));
   const edges = executionNodes.map((node) => {
     const requestedParent = node.data.parentNodeId;
-    const source = requestedParent && visibleIds.has(requestedParent)
+    const fallbackSource = node.data.runId ? `datasource:${node.data.runId}` : 'datasource';
+    let source = requestedParent && visibleIds.has(requestedParent)
       ? requestedParent
-      : 'datasource';
+      : fallbackSource;
+
+    // SQL 단계에서 분기한 노드는 직전 SQL 노드가 아니라, 그 노드가 속한 run의 Data
+    // Source에서 바로 뻗어나온다(SQL 분기는 upstream 데이터를 재사용하지 않으므로).
+    if (node.data.agentName === 'sql_agent' && requestedParent) {
+      const rootRunId = runIdByNodeId.get(requestedParent) ?? node.data.runId;
+      const rootDatasourceId = rootRunId ? `datasource:${rootRunId}` : null;
+      if (rootDatasourceId && visibleIds.has(rootDatasourceId)) {
+        source = rootDatasourceId;
+      }
+    }
     const isActive = node.data.status === 'running';
     return {
       id: `${source}-to-${node.id}`,
