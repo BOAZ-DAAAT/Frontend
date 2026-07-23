@@ -320,6 +320,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     error: null,
     isLoading: false,
   });
+  const [pendingReportConfirmation, setPendingReportConfirmation] = useState<PendingReportConfirmation | null>(null);
   const reportRequestSequence = useRef(0);
   const hydratedSummaryNodes = useRef(new Set<string>());
   const laneOffsetByRunId = useRef(new Map<string, PositionOffset>());
@@ -609,6 +610,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   useEffect(() => {
     reportRequestSequence.current += 1;
     setNodeReportRequest({ data: null, error: null, isLoading: false });
+    setPendingReportConfirmation(null);
     if (mode === 'report') setSelectedNodeSummary(null);
   }, [mode]);
 
@@ -935,6 +937,9 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           reportRequestSequence.current += 1;
           setNodeReportRequest({ data: null, error: null, isLoading: false });
         }}
+        pendingReportConfirmation={pendingReportConfirmation}
+        onConfirmReportGeneration={handleConfirmReportGeneration}
+        onCancelReportGeneration={handleCancelReportGeneration}
         onBranchPromptSend={handleBranchPromptSend}
         canDeleteAllNodes={hasDeletableNodes && !isGenerating && !isDeletingNodes}
         isDeletingAllNodes={isDeletingNodes}

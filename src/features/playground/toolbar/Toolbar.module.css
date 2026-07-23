@@ -1,3 +1,10 @@
+.toolbarWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -10,4 +17,50 @@
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
   backdrop-filter: var(--effect-surface-blur);
   -webkit-backdrop-filter: var(--effect-surface-blur);
+}
+
+.modeDescription {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  margin: 0;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 55%);
+  color: var(--color-brand-primary);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
+  pointer-events: none;
+  animation: modeDescriptionFlash 3.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes modeDescriptionFlash {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -0.375rem);
+  }
+
+  8% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  75% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -0.25rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modeDescription {
+    animation: none;
+    opacity: 0;
+  }
 }
