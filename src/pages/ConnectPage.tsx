@@ -64,8 +64,11 @@ export function ConnectPage() {
         'mt-2 w-full rounded-xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-brand-500';
 
     return (
-        <main className="flex min-h-screen items-center justify-center bg-slate-950 p-6">
-            <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-6">
+        <main
+            className="relative isolate flex min-h-screen items-center justify-center overflow-hidden p-6"
+            style={{ background: 'transparent' }}
+        >
+            <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.04] p-6">
                 <h1 className="text-lg font-semibold text-white">원격 MySQL 연결</h1>
 
                 {/* ── 1단계: 접속 폼 (연결 전에만) ── */}

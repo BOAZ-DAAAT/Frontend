@@ -35,8 +35,9 @@
 
   --color-brand-primary: #343434;
 
-  --color-background: #EAEAEA;
+  --color-background: #c3cbe0;
   --color-background-dot: #ffffff;
+  --wave-background-gradient: linear-gradient(145deg, #c3cbe0 0%, #aab6cf 100%);
 
   --color-surface: rgb(255 255 255 / 60%);
   --color-surface-solid: #ffffff;
@@ -54,7 +55,7 @@ body {
   min-width: 320px;
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-background);
+  background: var(--wave-background-gradient);
 }
 
 button,

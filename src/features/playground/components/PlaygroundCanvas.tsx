@@ -6,6 +6,7 @@ import {
   type Edge,
   type Node,
   type NodeChange,
+  type OnNodeDrag,
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
@@ -54,6 +55,10 @@ import styles from './PlaygroundCanvas.module.css';
 // 모듈 레벨 상수 (매 렌더 재생성 방지)
 const nodeTypes = { playground: PlaygroundNode };
 const edgeTypes = { playground: PlaygroundEdge };
+const ALIGNMENT_SNAP_THRESHOLD = 56;
+const ALIGNMENT_SNAP_DURATION = 260;
+const FALLBACK_NODE_WIDTH = 320;
+const FOLLOW_RESPONSE = 0.3;
 
 const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' | 'description'>> = {
   'sql-agent': {
@@ -84,6 +89,8 @@ const BRANCH_STAGE_BY_NODE_KIND: Partial<Record<PlaygroundNodeData['kind'], Bran
 type PlaygroundCanvasProps = {
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
+  isLeavingForSessions: boolean;
+  isEnteringFromSessions: boolean;
 };
 
 type Clarification = {
@@ -124,10 +131,30 @@ type NodeReportRequest = {
   isLoading: boolean;
 };
 
-type PositionOffset = {
-  x: number;
-  y: number;
-};
+function getDescendantDepths(edges: Edge[], rootId: string): Map<string, number> {
+  const descendants = new Map<string, number>();
+  const pending = [{ id: rootId, depth: 0 }];
+
+  while (pending.length) {
+    const parent = pending.shift();
+    if (!parent) continue;
+
+    for (const edge of edges) {
+      if (edge.source !== parent.id || descendants.has(edge.target) || edge.target === rootId) {
+        continue;
+      }
+      const depth = parent.depth + 1;
+      descendants.set(edge.target, depth);
+      pending.push({ id: edge.target, depth });
+    }
+  }
+
+  return descendants;
+}
+
+function getDescendantNodeIds(edges: Edge[], rootId: string): Set<string> {
+  return new Set(getDescendantDepths(edges, rootId).keys());
+}
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = metadata?.[key];
@@ -236,7 +263,12 @@ function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
   ));
 }
 
-export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasProps) {
+export function PlaygroundCanvas({
+  preview,
+  onClosePreview,
+  isLeavingForSessions,
+  isEnteringFromSessions,
+}: PlaygroundCanvasProps) {
   const initialGraph = useMemo(
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
     [],
@@ -260,7 +292,12 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   });
   const reportRequestSequence = useRef(0);
   const hydratedSummaryNodes = useRef(new Set<string>());
-  const laneOffsetByRunId = useRef(new Map<string, PositionOffset>());
+  const draggedNodeId = useRef<string | null>(null);
+  const dragStartPositions = useRef(new Map<string, { x: number; y: number }>());
+  const followTargets = useRef(new Map<string, { x: number; y: number }>());
+  const followDepths = useRef(new Map<string, number>());
+  const followAnimationFrame = useRef<number | null>(null);
+  const snapAnimationFrame = useRef<number | null>(null);
 
   const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
   const [isDeletingNodes, setIsDeletingNodes] = useState(false);
@@ -340,59 +377,190 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const analysisReview = useMemo(() => getAnalysisReview(run, visibleEvents), [visibleEvents, run]);
   const hasDeletableNodes = nodes.some((node) => node.id !== 'datasource');
 
+  const startDescendantFollow = () => {
+    if (followAnimationFrame.current !== null) return;
+
+    const animateFollowers = () => {
+      let shouldContinue = false;
+
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        const target = followTargets.current.get(node.id);
+        const depth = followDepths.current.get(node.id);
+        if (!target || !depth) return node;
+
+        const response = FOLLOW_RESPONSE / (1 + (depth - 1) * 0.38);
+        const nextPosition = {
+          x: node.position.x + (target.x - node.position.x) * response,
+          y: node.position.y + (target.y - node.position.y) * response,
+        };
+
+        if (
+          Math.abs(target.x - nextPosition.x) > 0.2
+          || Math.abs(target.y - nextPosition.y) > 0.2
+        ) {
+          shouldContinue = true;
+        }
+
+        return { ...node, position: nextPosition };
+      }));
+
+      if (shouldContinue && draggedNodeId.current) {
+        followAnimationFrame.current = requestAnimationFrame(animateFollowers);
+      } else {
+        followAnimationFrame.current = null;
+      }
+    };
+
+    followAnimationFrame.current = requestAnimationFrame(animateFollowers);
+  };
+
+  const stopDescendantFollow = () => {
+    if (followAnimationFrame.current !== null) {
+      cancelAnimationFrame(followAnimationFrame.current);
+      followAnimationFrame.current = null;
+    }
+    followTargets.current.clear();
+    followDepths.current.clear();
+  };
+
   const handleNodesChange = (changes: NodeChange<Node<PlaygroundNodeData>>[]) => {
     setNodes((currentNodes) => {
-      const currentById = new Map(currentNodes.map((node) => [node.id, node]));
-      const nextNodes = applyNodeChanges(changes, currentNodes);
-      const nextById = new Map(nextNodes.map((node) => [node.id, node]));
-      const laneDeltaByRunId = new Map<string, PositionOffset>();
+      const dragRootId = draggedNodeId.current;
+      const applicableChanges = dragRootId
+        ? changes.filter((change) => change.type !== 'position' || change.id === dragRootId)
+        : changes;
+      return applyNodeChanges(applicableChanges, currentNodes);
+    });
+  };
 
-      for (const change of changes) {
-        if (change.type !== 'position' || !change.position) continue;
-        const previous = currentById.get(change.id);
-        const next = nextById.get(change.id);
-        const runId = previous?.data.runId;
-        if (!previous || !next || !runId) continue;
-        const deltaX = next.position.x - previous.position.x;
-        const deltaY = next.position.y - previous.position.y;
-        if (!deltaX && !deltaY) continue;
-        const previousDelta = laneDeltaByRunId.get(runId) ?? { x: 0, y: 0 };
-        laneDeltaByRunId.set(runId, {
-          x: previousDelta.x + deltaX,
-          y: previousDelta.y + deltaY,
-        });
-      }
+  const handleNodeDragStart: OnNodeDrag<Node<PlaygroundNodeData>> = (_event, node) => {
+    if (snapAnimationFrame.current !== null) {
+      cancelAnimationFrame(snapAnimationFrame.current);
+      snapAnimationFrame.current = null;
+    }
+    draggedNodeId.current = node.id;
+    const descendantDepths = getDescendantDepths(edges, node.id);
+    const movingIds = new Set(descendantDepths.keys());
+    movingIds.add(node.id);
+    followDepths.current = descendantDepths;
+    followTargets.current.clear();
+    dragStartPositions.current = new Map(
+      nodes
+        .filter((currentNode) => movingIds.has(currentNode.id))
+        .map((currentNode) => [currentNode.id, { ...currentNode.position }]),
+    );
+    dragStartPositions.current.set(node.id, { ...node.position });
+  };
 
-      if (!laneDeltaByRunId.size) return nextNodes;
+  const handleNodeDrag: OnNodeDrag<Node<PlaygroundNodeData>> = (_event, draggedNode) => {
+    const originalRootPosition = dragStartPositions.current.get(draggedNode.id);
+    if (!originalRootPosition) return;
 
-      laneDeltaByRunId.forEach((delta, runId) => {
-        const previousOffset = laneOffsetByRunId.current.get(runId) ?? { x: 0, y: 0 };
-        laneOffsetByRunId.current.set(runId, {
-          x: previousOffset.x + delta.x,
-          y: previousOffset.y + delta.y,
-        });
+    const totalDelta = {
+      x: draggedNode.position.x - originalRootPosition.x,
+      y: draggedNode.position.y - originalRootPosition.y,
+    };
+    for (const nodeId of followDepths.current.keys()) {
+      const originalPosition = dragStartPositions.current.get(nodeId);
+      if (!originalPosition) continue;
+      followTargets.current.set(nodeId, {
+        x: originalPosition.x + totalDelta.x,
+        y: originalPosition.y + totalDelta.y,
       });
+    }
+    startDescendantFollow();
+  };
 
-      const movedIds = new Set(
-        changes
-          .filter((change) => change.type === 'position')
-          .map((change) => change.id),
-      );
-      return nextNodes.map((node) => {
-        const runId = node.data.runId;
-        const delta = runId ? laneDeltaByRunId.get(runId) : undefined;
-        if (!delta || movedIds.has(node.id)) return node;
+  const handleNodeDragStop: OnNodeDrag<Node<PlaygroundNodeData>> = (_event, draggedNode) => {
+    draggedNodeId.current = null;
+    stopDescendantFollow();
+
+    const originalPositions = new Map(dragStartPositions.current);
+    dragStartPositions.current.clear();
+    const parentEdge = edges.find((edge) => edge.target === draggedNode.id);
+    const parentNode = parentEdge
+      ? nodes.find((node) => node.id === parentEdge.source)
+      : null;
+    const movingIds = getDescendantNodeIds(edges, draggedNode.id);
+    movingIds.add(draggedNode.id);
+    const startPositions = new Map(
+      nodes
+        .filter((node) => movingIds.has(node.id))
+        .map((node) => [node.id, node.position]),
+    );
+    startPositions.set(draggedNode.id, draggedNode.position);
+    const originalRootPosition = originalPositions.get(draggedNode.id) ?? draggedNode.position;
+    const dragDelta = {
+      x: draggedNode.position.x - originalRootPosition.x,
+      y: draggedNode.position.y - originalRootPosition.y,
+    };
+    const translatedPositions = new Map(
+      [...originalPositions].map(([nodeId, position]) => [
+        nodeId,
+        { x: position.x + dragDelta.x, y: position.y + dragDelta.y },
+      ]),
+    );
+    const parentRight = parentNode
+      ? parentNode.position.x
+        + (parentNode.measured?.width ?? parentNode.width ?? FALLBACK_NODE_WIDTH)
+      : Number.NEGATIVE_INFINITY;
+    const hasCrossedParentBoundary = draggedNode.position.x < parentRight;
+    const alignmentDeltaY = parentNode
+      ? parentNode.position.y - draggedNode.position.y
+      : 0;
+    const shouldAlignVertically = (
+      Boolean(parentNode)
+      && Math.abs(alignmentDeltaY) <= ALIGNMENT_SNAP_THRESHOLD
+      && Math.abs(alignmentDeltaY) >= 0.5
+    );
+
+    const targetPositions = hasCrossedParentBoundary
+      ? originalPositions
+      : shouldAlignVertically
+        ? new Map(
+          [...translatedPositions].map(([nodeId, position]) => [
+            nodeId,
+            { x: position.x, y: position.y + alignmentDeltaY },
+          ]),
+        )
+        : translatedPositions;
+    const animationStartedAt = performance.now();
+
+    const animateAlignment = (now: number) => {
+      const progress = Math.min((now - animationStartedAt) / ALIGNMENT_SNAP_DURATION, 1);
+      const easedProgress = 1 - (1 - progress) ** 3;
+
+      setNodes((currentNodes) => currentNodes.map((node) => {
+        const startPosition = startPositions.get(node.id);
+        const targetPosition = targetPositions.get(node.id);
+        if (!startPosition || !targetPosition) return node;
         return {
           ...node,
           position: {
-            ...node.position,
-            x: node.position.x + delta.x,
-            y: node.position.y + delta.y,
+            x: startPosition.x + (targetPosition.x - startPosition.x) * easedProgress,
+            y: startPosition.y + (targetPosition.y - startPosition.y) * easedProgress,
           },
         };
-      });
-    });
+      }));
+
+      if (progress < 1) {
+        snapAnimationFrame.current = requestAnimationFrame(animateAlignment);
+      } else {
+        snapAnimationFrame.current = null;
+      }
+    };
+
+    snapAnimationFrame.current = requestAnimationFrame(animateAlignment);
   };
+
+  useEffect(() => () => {
+    if (followAnimationFrame.current !== null) {
+      cancelAnimationFrame(followAnimationFrame.current);
+    }
+    if (snapAnimationFrame.current !== null) {
+      cancelAnimationFrame(snapAnimationFrame.current);
+    }
+  }, []);
 
   useEffect(() => {
     setIsSubmittingClarification(false);
@@ -410,18 +578,14 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     const nextGraph = deriveNodeGraphFromEvents(visibleEvents, playgroundNodes, playgroundEdges);
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
+      const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
 
       const eventNodes = nextGraph.nodes.map((node) => {
-        const offset = node.data.runId ? laneOffsetByRunId.current.get(node.data.runId) : undefined;
+        const currentNode = currentNodesById.get(node.id);
         const data = { ...node.data, onDeleteRun: handleDeleteRunStable };
-        if (!offset || (!offset.x && !offset.y)) return { ...node, data };
         return {
           ...node,
-          position: {
-            ...node.position,
-            x: node.position.x + offset.x,
-            y: node.position.y + offset.y,
-          },
+          position: currentNode?.position ?? node.position,
           data,
         };
       });
@@ -603,9 +767,6 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
   const handleCreateNode = (kind: CreatableNodeKind) => {
     const selectedNode = nodes.find((node) => node.selected);
-    const childCount = selectedNode
-      ? edges.filter((edge) => edge.source === selectedNode.id).length
-      : 0;
     const nodeId = `manual-${crypto.randomUUID()}`;
 
     setNodes((currentNodes) => {
@@ -621,7 +782,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           position: selectedNode
             ? {
                 x: selectedNode.position.x + 460,
-                y: selectedNode.position.y + childCount * 200,
+                y: selectedNode.position.y,
               }
             : { x: 280 + column * 384, y: 320 + row * 200 },
           data: {
@@ -763,7 +924,11 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   };
 
   return (
-    <div className={styles.canvas}>
+    <div
+      className={`${styles.canvas} ${
+        isLeavingForSessions ? styles.canvasLeavingForSessions : ''
+      } ${isEnteringFromSessions ? styles.canvasEnteringFromSessions : ''}`}
+    >
       {!isSessionView ? (
         <ReactFlow
           nodes={nodes}
@@ -771,6 +936,9 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={handleNodesChange}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDrag={handleNodeDrag}
+          onNodeDragStop={handleNodeDragStop}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
           onEdgeClick={handleEdgeClick}
@@ -818,6 +986,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         preview={preview}
         onClosePreview={onClosePreview}
         onCreateNode={handleCreateNode}
+        isLeavingForSessions={isLeavingForSessions}
+        isEnteringFromSessions={isEnteringFromSessions}
       />
     </div>
   );

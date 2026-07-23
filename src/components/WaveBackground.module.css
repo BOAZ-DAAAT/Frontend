@@ -1,0 +1,139 @@
+.field {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--wave-background-gradient);
+  pointer-events: none;
+}
+
+.wave {
+  position: absolute;
+  display: block;
+  border-radius: 46% 54% 63% 37% / 58% 42% 56% 44%;
+  opacity: 0.72;
+  filter: blur(42px);
+  mix-blend-mode: screen;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.waveOne {
+  top: -31%;
+  left: -26%;
+  width: 92vmax;
+  height: 58vmax;
+  background:
+    radial-gradient(ellipse at 52% 50%,
+      transparent 35%,
+      rgb(239 248 255 / 68%) 47%,
+      rgb(202 229 249 / 42%) 57%,
+      transparent 72%);
+  animation: waveOneFlow 10s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite alternate;
+}
+
+.waveTwo {
+  top: 2%;
+  right: -34%;
+  width: 86vmax;
+  height: 70vmax;
+  background:
+    radial-gradient(ellipse at 42% 48%,
+      transparent 28%,
+      rgb(105 181 235 / 35%) 43%,
+      rgb(222 240 253 / 48%) 57%,
+      transparent 74%);
+  animation: waveTwoFlow 13s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+.waveThree {
+  bottom: -42%;
+  left: -8%;
+  width: 88vmax;
+  height: 64vmax;
+  background:
+    radial-gradient(ellipse at 48% 44%,
+      transparent 30%,
+      rgb(210 234 251 / 44%) 45%,
+      rgb(117 183 230 / 24%) 61%,
+      transparent 76%);
+  animation: waveThreeFlow 16s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate;
+}
+
+.waveFour {
+  top: 24%;
+  left: 10%;
+  width: 60vmax;
+  height: 92vmax;
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      transparent 34%,
+      rgb(231 245 255 / 34%) 46%,
+      rgb(164 209 240 / 20%) 60%,
+      transparent 73%);
+  opacity: 0.58;
+  filter: blur(58px);
+  animation: waveFourFlow 19s cubic-bezier(0.36, 0, 0.64, 1) infinite alternate;
+}
+
+@keyframes waveOneFlow {
+  0% {
+    transform: translate3d(-5%, -3%, 0) rotate(-14deg) scale(1.03, 0.92) skewX(-5deg);
+  }
+
+  48% {
+    transform: translate3d(6%, 5%, 0) rotate(-5deg) scale(1.12, 1.03) skewX(4deg);
+  }
+
+  100% {
+    transform: translate3d(13%, 11%, 0) rotate(4deg) scale(0.98, 1.12) skewX(-2deg);
+  }
+}
+
+@keyframes waveTwoFlow {
+  0% {
+    transform: translate3d(8%, -7%, 0) rotate(13deg) scale(1.08, 0.94) skewY(4deg);
+  }
+
+  52% {
+    transform: translate3d(-4%, 3%, 0) rotate(4deg) scale(0.96, 1.08) skewY(-5deg);
+  }
+
+  100% {
+    transform: translate3d(-13%, 9%, 0) rotate(-7deg) scale(1.12, 1.01) skewY(2deg);
+  }
+}
+
+@keyframes waveThreeFlow {
+  0% {
+    transform: translate3d(-8%, 7%, 0) rotate(8deg) scale(1.05, 0.96) skewX(3deg);
+  }
+
+  45% {
+    transform: translate3d(2%, -5%, 0) rotate(-2deg) scale(1.13, 1.08) skewX(-4deg);
+  }
+
+  100% {
+    transform: translate3d(11%, -12%, 0) rotate(-10deg) scale(0.98, 1.14) skewX(5deg);
+  }
+}
+
+@keyframes waveFourFlow {
+  0% {
+    transform: translate3d(-7%, -5%, 0) rotate(-10deg) scale(0.94, 1.08);
+  }
+
+  50% {
+    transform: translate3d(5%, 2%, 0) rotate(2deg) scale(1.08, 0.97);
+  }
+
+  100% {
+    transform: translate3d(10%, 8%, 0) rotate(11deg) scale(1.02, 1.13);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wave {
+    animation: none;
+  }
+}

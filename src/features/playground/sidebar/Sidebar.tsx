@@ -1,3 +1,5 @@
+import { useEffect, useState, type TransitionEvent } from 'react';
+
 import { AccountAvatar } from '@/features/playground/account/AccountAvatar';
 import sidebarProfileImage from '@/features/playground/account/assets/sidebar-profile.png';
 
@@ -13,25 +15,51 @@ export function Sidebar() {
     activeSection,
     isExpanded,
     openSection,
+    openSessions,
     openSessionCreate,
     selectSession,
-    toggleSessions,
     view,
   } = useSidebar();
   const sidebarSections = useSidebarData();
   const isSessionView = view === 'sessions';
+  const [isSessionContentReady, setIsSessionContentReady] = useState(false);
+
+  useEffect(() => {
+    if (!isSessionView || !isExpanded) {
+      setIsSessionContentReady(false);
+      return;
+    }
+
+    const fallback = window.setTimeout(() => {
+      setIsSessionContentReady(true);
+    }, 340);
+
+    return () => window.clearTimeout(fallback);
+  }, [isExpanded, isSessionView]);
+
+  const handleWidthTransitionEnd = (event: TransitionEvent<HTMLElement>) => {
+    if (
+      event.target === event.currentTarget
+      && event.propertyName === 'width'
+      && isSessionView
+      && isExpanded
+    ) {
+      setIsSessionContentReady(true);
+    }
+  };
 
   return (
     <aside
       className={`${styles.sidebar} ${isExpanded ? styles.expanded : styles.collapsed} ${
         isSessionView ? styles.sessionMode : ''
       }`}
+      onTransitionEnd={handleWidthTransitionEnd}
     >
       <button
         type="button"
         className={styles.logo}
-        onClick={toggleSessions}
-        aria-label={isSessionView ? '세션 선택 닫기' : '세션 선택 열기'}
+        onClick={openSessions}
+        aria-label="세션 선택 열기"
         aria-pressed={isSessionView}
       >
         <AccountAvatar size="compact" imageSrc={sidebarProfileImage} />
@@ -39,7 +67,14 @@ export function Sidebar() {
       <div className={styles.divider} />
 
       {isSessionView ? (
-        <SessionSidebar onCreateSession={openSessionCreate} onSelectSession={selectSession} />
+        <div
+          className={`${styles.sessionContent} ${
+            isSessionContentReady ? styles.sessionContentReady : ''
+          }`}
+          aria-hidden={!isSessionContentReady}
+        >
+          <SessionSidebar onCreateSession={openSessionCreate} onSelectSession={selectSession} />
+        </div>
       ) : (
         <nav className={styles.sections}>
           {sidebarSections.map((section) => {

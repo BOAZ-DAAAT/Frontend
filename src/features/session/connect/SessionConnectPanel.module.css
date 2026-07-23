@@ -4,13 +4,10 @@
   box-sizing: border-box;
   padding: 1rem 0.5rem 2rem;
   overflow: auto;
-  border: 1px solid rgb(255 255 255 / 20%);
+  border: 0;
   border-radius: 1.5rem;
-  background: rgb(255 255 255 / 20%);
-  box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
+  background: rgb(245 246 248 / 30%);
   color: var(--color-brand-primary);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
 }
 
 .header {
@@ -66,8 +63,7 @@
   padding: 1.5rem;
   flex-direction: column;
   border-radius: 1rem;
-  background: rgb(255 255 255 / 70%);
-  box-shadow: 0 4px 40px rgb(0 0 0 / 5%);
+  background: transparent;
 }
 
 .fields {
@@ -90,26 +86,25 @@
   padding: 0 0.75rem;
   align-items: center;
   gap: 0.625rem;
-  border: 1px solid rgb(52 52 52 / 12%);
-  border-radius: 0.5rem;
-  background: rgb(255 255 255 / 58%);
+  border: 0;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 20%);
   color: #7f7f7f;
-  transition:
-    border-color 180ms ease,
-    background 180ms ease,
-    box-shadow 180ms ease;
+  transition: background 180ms ease;
 }
 
 .inputWrap:focus-within {
-  border-color: rgb(52 52 52 / 38%);
-  background: rgb(255 255 255 / 84%);
-  box-shadow: 0 0 0 0.1875rem rgb(255 255 255 / 52%);
+  background: rgb(255 255 255 / 20%);
 }
 
 .inputWrap svg {
-  width: 1rem;
-  height: 1rem;
+  width: 2rem;
+  height: 2rem;
+  box-sizing: border-box;
+  padding: 0.5rem;
   flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 30%);
 }
 
 .inputWrap input,
@@ -121,6 +116,21 @@
   color: var(--color-brand-primary);
   font-size: var(--text-base);
   outline: 0;
+}
+
+.inputWrap input::placeholder {
+  color: rgb(127 127 127 / 72%);
+}
+
+.inputWrap input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.inputWrap input[type='number']::-webkit-inner-spin-button,
+.inputWrap input[type='number']::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
 }
 
 .error {
@@ -145,6 +155,9 @@
   font-size: var(--text-base);
   font-weight: var(--font-medium);
   cursor: pointer;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .submitButton:hover:not(:disabled) {
@@ -152,9 +165,14 @@
   box-shadow: 0 0.5rem 1.25rem rgb(52 52 52 / 18%);
 }
 
+.submitButton:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 0.1875rem;
+}
+
 .submitButton:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  opacity: 1;
 }
 
 .submitButton svg {
