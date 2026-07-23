@@ -16,6 +16,7 @@ import {
   cancelAgentRun,
   createAgentRun,
   deleteAgentRun,
+  listAgentSessionEvents,
   resumeAgentRun,
   resumeAgentRunApproval,
   type BranchStage,
@@ -313,6 +314,25 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   }, [events]);
 
   useEffect(() => {
+    // 새로고침 직후엔 activeRunId의 계보만 들어와 있으니, 세션에서 시작한 다른 메인
+    // 쿼리 트리들도 마운트 시점에 한 번 통째로 가져와 합쳐준다.
+    const sessionId = getCurrentSessionId();
+    if (!sessionId) return;
+    let cancelled = false;
+    void listAgentSessionEvents(sessionId)
+      .then((sessionEvents) => {
+        if (cancelled) return;
+        setVisibleEvents((currentEvents) => mergeRunEvents(currentEvents, sessionEvents));
+      })
+      .catch(() => {
+        // 세션 전체 히스토리 복원은 부가 기능이라 실패해도 현재 run 표시는 계속되어야 한다
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setStoredPlaygroundGraph(nodes, edges);
   }, [edges, nodes]);
 
@@ -537,7 +557,6 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     setCancelRunError(null);
     setActiveRunId(null);
     setSelectedNodeSummary(null);
-    setVisibleEvents([]);
 
     try {
       const run = await createAgentRun(sessionId, prompt);
@@ -714,7 +733,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
     setIsStartingRun(true);
     try {
-      const branchRun = await branchAgentRun(branchSourceRunId, startStage, prompt);
+      const branchRun = await branchAgentRun(branchSourceRunId, startStage, prompt, selectedNodeSummary.id);
       setActiveRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
       setSelectedNodeSummary(null);
