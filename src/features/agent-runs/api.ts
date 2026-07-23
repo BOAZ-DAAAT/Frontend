@@ -33,6 +33,12 @@ export type AgentRunDeleteResponse = {
   deleted_artifact_count: number;
 };
 
+export type AgentRunCancelResponse = {
+  run_id: string;
+  status: 'cancelled';
+  discarded_node_id: string | null;
+};
+
 export function createAgentRun(sessionId: string, query: string) {
   return apiClient.post<AgentRunResponse>('/agent-runs', {
     session_id: sessionId,
@@ -46,6 +52,13 @@ export function getAgentRun(runId: string) {
 
 export function deleteAgentRun(runId: string) {
   return apiClient.delete<AgentRunDeleteResponse>(`/agent-runs/${encodeURIComponent(runId)}`);
+}
+
+export function cancelAgentRun(runId: string) {
+  return apiClient.post<AgentRunCancelResponse>(
+    `/agent-runs/${encodeURIComponent(runId)}/cancel`,
+    {},
+  );
 }
 
 export function listAgentRunEvents(runId: string) {

@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css';
 
 import {
   branchAgentRun,
+  cancelAgentRun,
   createAgentRun,
   deleteAgentRun,
   listAgentSessionEvents,
@@ -266,6 +267,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const [isDeletingNodes, setIsDeletingNodes] = useState(false);
   const [deleteNodesError, setDeleteNodesError] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
+  const [isCancellingRun, setIsCancellingRun] = useState(false);
+  const [cancelRunError, setCancelRunError] = useState<string | null>(null);
   const [isSubmittingClarification, setIsSubmittingClarification] = useState(false);
   const [clarificationError, setClarificationError] = useState<string | null>(null);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
@@ -345,7 +348,11 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const { mode } = useMode();
   const isSessionView = view === 'sessions';
   const isRunActive = Boolean(
-    activeRunId && (!run || !['succeeded', 'failed', 'cancelled'].includes(run.status)),
+    activeRunId && (
+      !run
+      || run.run_id !== activeRunId
+      || !['succeeded', 'failed', 'cancelled'].includes(run.status)
+    ),
   );
   const isGenerating = isStartingRun || isRunActive;
   const clarification = useMemo(() => getClarification(run, visibleEvents), [visibleEvents, run]);
@@ -547,6 +554,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }
 
     setIsStartingRun(true);
+    setCancelRunError(null);
+    setActiveRunId(null);
     setSelectedNodeSummary(null);
 
     try {
@@ -557,6 +566,23 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       console.error('Agent run failed:', error);
     } finally {
       setIsStartingRun(false);
+    }
+  };
+
+  const handleStopRun = async () => {
+    if (!activeRunId || !isRunActive || isCancellingRun) return;
+
+    setIsCancellingRun(true);
+    setCancelRunError(null);
+    try {
+      await cancelAgentRun(activeRunId);
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '실행을 정지하지 못했습니다. 다시 시도해 주세요.';
+      setCancelRunError(message);
+    } finally {
+      setIsCancellingRun(false);
     }
   };
 
@@ -776,6 +802,10 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
 
       <PlaygroundOverlay
         isGenerating={isGenerating}
+        canStop={isRunActive && !isStartingRun}
+        isStopping={isCancellingRun}
+        stopError={cancelRunError}
+        onStop={handleStopRun}
         onPromptSend={handlePromptSend}
         clarification={clarification}
         analysisReview={analysisReview}

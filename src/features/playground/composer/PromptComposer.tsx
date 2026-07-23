@@ -1,4 +1,4 @@
-import { Check, MessageCircleQuestion, X } from 'lucide-react';
+import { Check, MessageCircleQuestion, Square, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
@@ -7,6 +7,10 @@ import styles from './PromptComposer.module.css';
 
 interface PromptComposerProps {
   isGenerating: boolean;
+  canStop?: boolean;
+  isStopping?: boolean;
+  stopError?: string | null;
+  onStop?: () => Promise<void>;
   onSend: (prompt: string) => Promise<void>;
   clarification: {
     eventId: string | null;
@@ -57,6 +61,10 @@ function SendIcon() {
 
 export function PromptComposer({
   isGenerating,
+  canStop = false,
+  isStopping = false,
+  stopError = null,
+  onStop,
   onSend,
   clarification,
   analysisReview,
@@ -70,6 +78,12 @@ export function PromptComposer({
 }: PromptComposerProps) {
   const { ref, resize } = useAutoResizeTextarea(5);
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null);
+  const showStopButton = (
+    isGenerating
+    && !clarification
+    && !approval
+    && !analysisReview
+  );
 
   useEffect(() => {
     setReviewDecision(null);
@@ -101,6 +115,14 @@ export function PromptComposer({
   const handleReject = () => {
     if (isSubmittingApproval) return;
     void onApprovalDecision(false);
+  };
+
+  const handlePrimaryAction = () => {
+    if (showStopButton) {
+      if (!isStopping) void onStop?.();
+      return;
+    }
+    void handleSend();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -207,12 +229,24 @@ export function PromptComposer({
                 : '프롬프트를 입력해 주세요'}
           className={`${styles.textarea} ${styles.input}`}
           disabled={isSubmittingClarification || Boolean(approval) || Boolean(analysisReview)}
-          aria-describedby={clarificationError ? 'clarification-error' : undefined}
+          aria-describedby={
+            clarificationError
+              ? 'clarification-error'
+              : stopError
+                ? 'stop-error'
+                : undefined
+          }
         />
 
         {clarificationError ? (
           <p id="clarification-error" className={styles.error} role="alert">
             {clarificationError}
+          </p>
+        ) : null}
+
+        {stopError ? (
+          <p id="stop-error" className={styles.error} role="alert">
+            {stopError}
           </p>
         ) : null}
 
@@ -223,13 +257,23 @@ export function PromptComposer({
 
           <button
             type="button"
-            aria-label={clarification ? '답변 전송' : '전송'}
+            aria-label={showStopButton ? '실행 정지' : clarification ? '답변 전송' : '전송'}
+            title={showStopButton ? '실행 정지' : undefined}
             className={`${styles.iconButton} ${styles.sendButton}`}
-            onClick={() => void handleSend()}
-            disabled={isSubmittingClarification || Boolean(approval) || Boolean(analysisReview) || (isGenerating && !clarification)}
-            aria-busy={isSubmittingClarification}
+            onClick={handlePrimaryAction}
+            disabled={
+              showStopButton
+                ? isStopping || !canStop
+                : isSubmittingClarification
+                  || Boolean(approval)
+                  || Boolean(analysisReview)
+                  || (isGenerating && !clarification)
+            }
+            aria-busy={isSubmittingClarification || isStopping}
           >
-            <SendIcon />
+            {showStopButton
+              ? <Square size={10} fill="currentColor" strokeWidth={0} aria-hidden />
+              : <SendIcon />}
           </button>
         </div>
       </div>

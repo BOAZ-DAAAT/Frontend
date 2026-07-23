@@ -18,6 +18,10 @@ import styles from './PlaygroundOverlay.module.css';
 
 interface PlaygroundOverlayProps {
   isGenerating: boolean;
+  canStop: boolean;
+  isStopping: boolean;
+  stopError: string | null;
+  onStop: () => Promise<void>;
   onPromptSend: (prompt: string) => Promise<void>;
   clarification: {
     eventId: string | null;
@@ -67,6 +71,10 @@ interface PlaygroundOverlayProps {
 
 export function PlaygroundOverlay({
   isGenerating,
+  canStop,
+  isStopping,
+  stopError,
+  onStop,
   onPromptSend,
   clarification,
   analysisReview,
@@ -175,6 +183,10 @@ export function PlaygroundOverlay({
       {!isSessionView ? <div className={`${styles.dock} ${nodeSummary ? styles.dockHidden : ''}`}>
         <PromptComposer
           isGenerating={isGenerating}
+          canStop={canStop}
+          isStopping={isStopping}
+          stopError={stopError}
+          onStop={onStop}
           onSend={onPromptSend}
           clarification={clarification}
           analysisReview={analysisReview}
