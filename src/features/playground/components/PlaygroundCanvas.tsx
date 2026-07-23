@@ -19,6 +19,7 @@ import {
   listAgentSessionEvents,
   resumeAgentRun,
   resumeAgentRunApproval,
+  resumeAnalysisReview,
   type BranchStage,
 } from '@/features/agent-runs/api';
 import {
@@ -99,10 +100,27 @@ type Approval = {
   reason: string;
 };
 
+type AnalysisReviewOption = {
+  id: string;
+  label: string;
+  method: string;
+  advantages: string[];
+  limitations: string[];
+  impact: string;
+  recommended: boolean;
+};
+
 type AnalysisReview = {
   eventId: string | null;
   agentName: string;
-  content: string;
+  approvalId: string;
+  question: string;
+  proposal: string;
+  rationale: string[];
+  options: AnalysisReviewOption[];
+  recommendedOptionId: string;
+  allowFreeText: boolean;
+  freeTextPrompt: string;
 };
 
 type SelectedNodeSummary = {
@@ -123,6 +141,12 @@ type NodeReportRequest = {
   data: AgentNodeReportResponse | null;
   error: string | null;
   isLoading: boolean;
+};
+
+type PendingReportConfirmation = {
+  runId: string;
+  nodeId: string;
+  label: string;
 };
 
 type PositionOffset = {
@@ -194,6 +218,25 @@ function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | nul
   return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
 }
 
+function reviewOptionFromMetadata(value: unknown): AnalysisReviewOption | null {
+  if (!value || typeof value !== 'object') return null;
+  const option = value as Record<string, unknown>;
+  const id = typeof option.id === 'string' ? option.id : '';
+  if (!id) return null;
+  const stringList = (input: unknown): string[] => (
+    Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : []
+  );
+  return {
+    id,
+    label: typeof option.label === 'string' ? option.label : id,
+    method: typeof option.method === 'string' ? option.method : '',
+    advantages: stringList(option.advantages),
+    limitations: stringList(option.limitations),
+    impact: typeof option.impact === 'string' ? option.impact : '',
+    recommended: option.recommended === true,
+  };
+}
+
 function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): AnalysisReview | null {
   let reviewEvent: RunEvent | null = null;
 
@@ -209,22 +252,40 @@ function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): Analysis
   }
 
   if (!reviewEvent && (
-    run?.status !== 'waiting_approval'
+    run?.status !== 'waiting_input'
     || interruptType(run.metadata) !== 'analysis_review'
   )) return null;
+  if (!reviewEvent) return null;
 
-  const content = metadataString(reviewEvent?.metadata, 'answer')
-    ?? metadataString(reviewEvent?.metadata, 'content')
-    ?? metadataString(reviewEvent?.metadata, 'review')
-    ?? reviewEvent?.message
-    ?? metadataString(run?.metadata, 'answer')
-    ?? '분석 결과를 검토한 뒤 진행 여부를 선택해 주세요.';
-  const agentName = metadataString(reviewEvent?.metadata, 'agent_name')
-    ?? reviewEvent?.node_name
+  const approvalId = metadataString(reviewEvent.metadata, 'approval_id');
+  const reviewRequest = reviewEvent.metadata?.review_request;
+  if (!approvalId || !reviewRequest || typeof reviewRequest !== 'object') return null;
+
+  const request = reviewRequest as Record<string, unknown>;
+  const options = Array.isArray(request.options)
+    ? request.options.map(reviewOptionFromMetadata).filter((option): option is AnalysisReviewOption => option !== null)
+    : [];
+  const agentName = metadataString(reviewEvent.metadata, 'agent_name')
+    ?? reviewEvent.node_name
     ?? metadataString(run?.metadata, 'node')
     ?? 'Analysis Agent';
 
-  return { eventId: reviewEvent?.event_id ?? null, agentName, content };
+  return {
+    eventId: reviewEvent.event_id ?? null,
+    agentName,
+    approvalId,
+    question: (typeof request.question === 'string' && request.question) || reviewEvent.message,
+    proposal: typeof request.proposal === 'string' ? request.proposal : '',
+    rationale: Array.isArray(request.rationale)
+      ? request.rationale.filter((item): item is string => typeof item === 'string')
+      : [],
+    options,
+    recommendedOptionId: typeof request.recommended_option_id === 'string' ? request.recommended_option_id : '',
+    allowFreeText: request.allow_free_text !== false,
+    freeTextPrompt: typeof request.free_text_prompt === 'string' && request.free_text_prompt
+      ? request.free_text_prompt
+      : '다른 분석 방향을 입력해 주세요.',
+  };
 }
 
 function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
@@ -273,6 +334,8 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
   const [clarificationError, setClarificationError] = useState<string | null>(null);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [isSubmittingAnalysisReview, setIsSubmittingAnalysisReview] = useState(false);
+  const [analysisReviewError, setAnalysisReviewError] = useState<string | null>(null);
   const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
   const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
 
@@ -423,6 +486,11 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     setIsSubmittingApproval(false);
     setApprovalError(null);
   }, [approval?.eventId]);
+
+  useEffect(() => {
+    setIsSubmittingAnalysisReview(false);
+    setAnalysisReviewError(null);
+  }, [analysisReview?.eventId]);
 
   useEffect(() => {
     if (activeRunId && !run && !runStreamError && visibleEvents.length === 0) return;
@@ -620,6 +688,26 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }
   };
 
+  const handleAnalysisReviewDecision = async (decision: { selectedOptionId?: string; freeText?: string }) => {
+    if (!activeRunId || !analysisReview || isSubmittingAnalysisReview) return;
+
+    setIsSubmittingAnalysisReview(true);
+    setAnalysisReviewError(null);
+    try {
+      await resumeAnalysisReview(activeRunId, {
+        approvalId: analysisReview.approvalId,
+        ...decision,
+      });
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '분석 검토 결과를 전송하지 못했습니다. 다시 시도해 주세요.';
+      setAnalysisReviewError(message);
+      setIsSubmittingAnalysisReview(false);
+      throw error;
+    }
+  };
+
   const handleCreateNode = (kind: CreatableNodeKind) => {
     const selectedNode = nodes.find((node) => node.selected);
     const childCount = selectedNode
@@ -682,6 +770,25 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
     }));
   };
 
+  const runReportGeneration = (runId: string, nodeId: string) => {
+    const requestSequence = reportRequestSequence.current + 1;
+    reportRequestSequence.current = requestSequence;
+    setNodeReportRequest({ data: null, error: null, isLoading: true });
+    void createAgentNodeReport(runId, nodeId)
+      .then((response) => {
+        if (reportRequestSequence.current !== requestSequence) return;
+        setNodeReportRequest({ data: response, error: null, isLoading: false });
+        notifyReportsUpdated();
+      })
+      .catch((error: unknown) => {
+        if (reportRequestSequence.current !== requestSequence) return;
+        const message = error instanceof BackendApiError
+          ? error.message
+          : '리포트를 생성하지 못했습니다.';
+        setNodeReportRequest({ data: null, error: message, isLoading: false });
+      });
+  };
+
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
     if (mode === 'report') {
       setSelectedNodeSummary(null);
@@ -694,22 +801,7 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         return;
       }
 
-      const requestSequence = reportRequestSequence.current + 1;
-      reportRequestSequence.current = requestSequence;
-      setNodeReportRequest({ data: null, error: null, isLoading: true });
-      void createAgentNodeReport(node.data.runId, node.id)
-        .then((response) => {
-          if (reportRequestSequence.current !== requestSequence) return;
-          setNodeReportRequest({ data: response, error: null, isLoading: false });
-          notifyReportsUpdated();
-        })
-        .catch((error: unknown) => {
-          if (reportRequestSequence.current !== requestSequence) return;
-          const message = error instanceof BackendApiError
-            ? error.message
-            : '리포트를 생성하지 못했습니다.';
-          setNodeReportRequest({ data: null, error: message, isLoading: false });
-        });
+      setPendingReportConfirmation({ runId: node.data.runId, nodeId: node.id, label: node.data.label });
       return;
     }
 
@@ -721,6 +813,17 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
       kind: node.data.kind,
       status: node.data.status,
     });
+  };
+
+  const handleConfirmReportGeneration = () => {
+    if (!pendingReportConfirmation) return;
+    const { runId, nodeId } = pendingReportConfirmation;
+    setPendingReportConfirmation(null);
+    runReportGeneration(runId, nodeId);
+  };
+
+  const handleCancelReportGeneration = () => {
+    setPendingReportConfirmation(null);
   };
 
   const handleBranchPromptSend = async (prompt: string) => {
@@ -816,6 +919,9 @@ export function PlaygroundCanvas({ preview, onClosePreview }: PlaygroundCanvasPr
         isSubmittingApproval={isSubmittingApproval}
         approvalError={approvalError}
         onApprovalDecision={handleApprovalDecision}
+        isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+        analysisReviewError={analysisReviewError}
+        onAnalysisReviewDecision={handleAnalysisReviewDecision}
         nodeSummary={selectedNodeSummary}
         nodeSummaryData={nodeSummaryRequest.data}
         nodeSummaryRunId={selectedNodeSummary?.runId ?? activeRunId}

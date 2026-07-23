@@ -31,7 +31,22 @@ interface PlaygroundOverlayProps {
   analysisReview: {
     eventId: string | null;
     agentName: string;
-    content: string;
+    approvalId: string;
+    question: string;
+    proposal: string;
+    rationale: string[];
+    options: {
+      id: string;
+      label: string;
+      method: string;
+      advantages: string[];
+      limitations: string[];
+      impact: string;
+      recommended: boolean;
+    }[];
+    recommendedOptionId: string;
+    allowFreeText: boolean;
+    freeTextPrompt: string;
   } | null;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
@@ -44,6 +59,9 @@ interface PlaygroundOverlayProps {
   isSubmittingApproval: boolean;
   approvalError: string | null;
   onApprovalDecision: (approved: boolean) => Promise<void>;
+  isSubmittingAnalysisReview: boolean;
+  analysisReviewError: string | null;
+  onAnalysisReviewDecision: (decision: { selectedOptionId?: string; freeText?: string }) => Promise<void>;
   nodeSummary: {
     id: string;
     label: string;
@@ -85,6 +103,9 @@ export function PlaygroundOverlay({
   isSubmittingApproval,
   approvalError,
   onApprovalDecision,
+  isSubmittingAnalysisReview,
+  analysisReviewError,
+  onAnalysisReviewDecision,
   nodeSummary,
   nodeSummaryData,
   nodeSummaryRunId,
@@ -197,6 +218,9 @@ export function PlaygroundOverlay({
           isSubmittingApproval={isSubmittingApproval}
           approvalError={approvalError}
           onApprovalDecision={onApprovalDecision}
+          isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+          analysisReviewError={analysisReviewError}
+          onAnalysisReviewDecision={onAnalysisReviewDecision}
         />
       </div> : null}
     </div>

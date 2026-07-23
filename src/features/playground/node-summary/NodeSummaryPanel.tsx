@@ -1315,6 +1315,9 @@ export function NodeSummaryPanel({
                 isSubmittingApproval={false}
                 approvalError={null}
                 onApprovalDecision={async () => undefined}
+                isSubmittingAnalysisReview={false}
+                analysisReviewError={null}
+                onAnalysisReviewDecision={async () => undefined}
               />
             </div>
           </div>

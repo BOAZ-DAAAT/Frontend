@@ -96,6 +96,24 @@ export function resumeAgentRunApproval(runId: string, approved: boolean, reason?
   );
 }
 
+export type AnalysisReviewDecisionPayload = {
+  approvalId: string;
+  selectedOptionId?: string;
+  freeText?: string;
+};
+
+export function resumeAnalysisReview(runId: string, decision: AnalysisReviewDecisionPayload) {
+  return apiClient.post<AgentRunResumeResponse>(
+    `/agent-runs/${encodeURIComponent(runId)}/resume`,
+    {
+      type: 'analysis_review',
+      approval_id: decision.approvalId,
+      ...(decision.selectedOptionId ? { selected_option_id: decision.selectedOptionId } : {}),
+      ...(decision.freeText ? { free_text: decision.freeText } : {}),
+    },
+  );
+}
+
 export function branchAgentRun(
   runId: string,
   startStage: BranchStage,
