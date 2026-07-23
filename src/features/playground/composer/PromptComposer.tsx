@@ -80,7 +80,6 @@ export function PromptComposer({
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null);
   const showStopButton = (
     isGenerating
-    && canStop
     && !clarification
     && !approval
     && !analysisReview
@@ -264,7 +263,7 @@ export function PromptComposer({
             onClick={handlePrimaryAction}
             disabled={
               showStopButton
-                ? isStopping
+                ? isStopping || !canStop
                 : isSubmittingClarification
                   || Boolean(approval)
                   || Boolean(analysisReview)
