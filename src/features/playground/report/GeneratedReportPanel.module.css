@@ -28,6 +28,7 @@
   padding: 1.5rem 1rem 2rem;
   place-items: start center;
   overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
 }
 

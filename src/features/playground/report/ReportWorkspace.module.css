@@ -27,6 +27,7 @@
   min-width: 0;
   padding: 1.5rem 0 2rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   scrollbar-width: none;
 }

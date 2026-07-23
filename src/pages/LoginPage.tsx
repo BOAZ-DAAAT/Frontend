@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LockKeyhole, UserRound } from 'lucide-react';
 
@@ -17,28 +17,41 @@ export function LoginPage() {
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isExiting, setIsExiting] = useState(false);
+    const [nextPath, setNextPath] = useState<string | null>(null);
 
     // RequireAuth가 튕겨내며 넘겨준 원래 목적지. 없으면(직접 /login 접근) 기본 /connect
     const from = (location.state as { from?: string } | null)?.from ?? '/sessions';
 
+    useEffect(() => {
+        if (!isExiting || !nextPath) return;
+
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const timer = window.setTimeout(() => {
+            navigate(nextPath, { replace: true });
+        }, reduceMotion ? 0 : 520);
+
+        return () => window.clearTimeout(timer);
+    }, [isExiting, navigate, nextPath]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (loading || isExiting) return;
+
         setLoading(true);
         setError(null);
         try {
             await login(username, password);
-            navigate(from, { replace: true }); // replace: 로그인 화면이 뒤로가기 히스토리에 안 남게
+            setNextPath(from);
+            setIsExiting(true);
         } catch (err) {
             setError(err instanceof Error ? err.message : '로그인에 실패했습니다.');
-        } finally {
             setLoading(false);
         }
     };
 
     return (
-        <main className={styles.page}>
-            <div className={styles.backgroundLayer} aria-hidden />
-
+        <main className={`${styles.page} ${isExiting ? styles.pageExiting : ''}`}>
             <div className={styles.loginLayer}>
                 <form onSubmit={handleSubmit} className={styles.panel}>
                     <div className={styles.surface}>
@@ -85,6 +98,8 @@ export function LoginPage() {
                         <button
                             type="submit"
                             className={styles.submitButton}
+                            disabled={loading || isExiting}
+                            aria-busy={loading || isExiting}
                         >
                             <span>{loading ? '로그인 중...' : '로그인'}</span>
                         </button>
@@ -103,7 +118,7 @@ export function LoginPage() {
                                 active={false}
                                 motion={0.48}
                                 speed={0.42}
-                                label="잔잔하고 느리게 흐르는 컬러 유체 블롭"
+                                label="잔잔하고 느리게 흐르는 비활성 컬러 유체 블롭"
                             />
                         </div>
                     </div>

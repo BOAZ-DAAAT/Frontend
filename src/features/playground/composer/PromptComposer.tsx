@@ -132,10 +132,11 @@ export function PromptComposer({
   };
 
   return (
-    <div
-      className={`${styles.composer} ${isGenerating ? styles.generating : ''} ${clarification || approval ? styles.composerClarification : ''} ${analysisReview ? styles.composerReview : ''
-        }`}
-    >
+    <div className={`${styles.composerShell} ${isGenerating ? styles.composerShellActive : ''}`}>
+      <div
+        className={`${styles.composer} ${isGenerating ? styles.composerActive : ''} ${clarification || approval ? styles.composerClarification : ''} ${analysisReview ? styles.composerReview : ''
+          }`}
+      >
       {clarification ? (
         <section className={styles.clarificationPanel} aria-label="에이전트 추가 질문">
           <div className={styles.clarificationMeta}>
@@ -275,6 +276,7 @@ export function PromptComposer({
               ? <Square size={10} fill="currentColor" strokeWidth={0} aria-hidden />
               : <SendIcon />}
           </button>
+        </div>
         </div>
       </div>
     </div>

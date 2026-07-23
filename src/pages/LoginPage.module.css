@@ -1,43 +1,9 @@
 .page {
-  --mist-blue: #b8cbd9;
-  --ice-blue: #d9dde2;
-
   position: relative;
   isolation: isolate;
   min-height: 100dvh;
   overflow: hidden;
-  background: var(--mist-blue);
-}
-
-.backgroundLayer,
-.visualPanel {
-  background-color: var(--mist-blue);
-  background:
-    radial-gradient(ellipse 62% 58% at 74% 58%,
-      rgb(201 160 186 / 70%) 0%,
-      rgb(164 154 201 / 34%) 34%,
-      transparent 68%),
-    radial-gradient(ellipse 70% 64% at 12% 76%,
-      rgb(145 201 205 / 48%) 0%,
-      rgb(120 184 194 / 16%) 52%,
-      transparent 76%),
-    radial-gradient(ellipse 96% 48% at 50% 108%,
-      rgb(138 170 208 / 68%) 0%,
-      rgb(184 203 217 / 34%) 50%,
-      transparent 82%),
-    linear-gradient(165deg,
-      #a9c2d5 0%,
-      var(--mist-blue) 32%,
-      var(--ice-blue) 69%,
-      #b4c2d3 100%);
-  background-attachment: fixed;
-  background-size: 100vw 100vh;
-}
-
-.backgroundLayer {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
+  background: transparent;
 }
 
 .loginLayer {
@@ -47,6 +13,30 @@
   min-height: 100dvh;
   grid-template-columns: minmax(22rem, 0.78fr) minmax(0, 1.22fr);
   transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pageExiting {
+  pointer-events: none;
+}
+
+.pageExiting .surface {
+  animation: loginContentFade 240ms ease both;
+}
+
+.pageExiting .panel {
+  animation: loginPanelFade 480ms ease both;
+}
+
+.pageExiting .blobStage {
+  animation: loginPanelFade 480ms ease both;
+}
+
+.pageExiting .visualFrame {
+  animation: visualFrameFade 480ms ease both;
+}
+
+.pageExiting .visualPanel {
+  animation: visualPanelFrameFade 480ms ease both;
 }
 
 .panel {
@@ -63,7 +53,7 @@
   justify-content: center;
   border: 0;
   border-radius: 0;
-  background: rgb(245 246 248 / 30%);
+  background: transparent;
 }
 
 .surface {
@@ -111,7 +101,7 @@
   box-sizing: border-box;
   padding: 1rem;
   border: 0;
-  background: rgb(245 246 248 / 30%);
+  background-color: transparent;
 }
 
 .visualPanel {
@@ -142,29 +132,6 @@
 .blobStage > canvas {
   width: 100%;
   height: auto;
-}
-
-.visualPanel::before,
-.visualPanel::after {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  content: '';
-  pointer-events: none;
-}
-
-.visualPanel::before {
-  inset: -10%;
-  background:
-    radial-gradient(circle at 78% 55%, rgb(185 135 168 / 30%), transparent 24%),
-    radial-gradient(circle at 38% 24%, rgb(221 243 242 / 22%), transparent 34%);
-  filter: blur(30px);
-}
-
-.visualPanel::after {
-  background:
-    radial-gradient(ellipse at center, transparent 52%, rgb(103 130 157 / 12%) 100%),
-    linear-gradient(180deg, rgb(255 255 255 / 5%), transparent 36%, rgb(124 145 174 / 7%));
 }
 
 .fields {
@@ -279,14 +246,12 @@
   cursor: pointer;
   transition:
     background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    box-shadow 180ms ease;
 }
 
 .submitButton:hover:not(:disabled) {
   background: #202020;
   box-shadow: 0 0.5rem 1.25rem rgb(52 52 52 / 18%);
-  transform: translateY(-1px);
 }
 
 .submitButton:focus-visible {
@@ -299,6 +264,30 @@
   height: 1.125rem;
 }
 
+@keyframes loginContentFade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes loginPanelFade {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes visualFrameFade {
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes visualPanelFrameFade {
+  to {
+    box-shadow: none;
+  }
+}
+
 .signupPrompt {
   display: flex;
   margin: 2rem 0 0;
@@ -309,9 +298,19 @@
   font-size: var(--text-sm);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pageExiting .surface,
+  .pageExiting .panel,
+  .pageExiting .blobStage,
+  .pageExiting .visualFrame,
+  .pageExiting .visualPanel {
+    animation: none;
+  }
+}
+
 @media (max-width: 48rem) {
   .page {
-    background: var(--mist-blue);
+    background: transparent;
   }
 
   .loginLayer {
