@@ -1,6 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 
-import type { PlaygroundNodeData } from './types';
+import { ERROR_NODE_DESCRIPTION, type PlaygroundNodeData } from './types';
 
 const GRAPH_STORAGE_KEY = 'daaat.playgroundGraph.v1';
 
@@ -16,6 +16,9 @@ function sanitizeNodes(nodes: Node<PlaygroundNodeData>[]): Node<PlaygroundNodeDa
     ...node,
     data: {
       ...node.data,
+      description: node.data.status === 'error'
+        ? ERROR_NODE_DESCRIPTION
+        : node.data.description,
       onDeleteRun: undefined,
     },
   }));
@@ -36,7 +39,16 @@ export function getStoredPlaygroundGraph(
       nodes: (parsed.nodes as Node<PlaygroundNodeData>[])
         .filter(
           (node) => !node.id.startsWith('datasource') && !node.id.startsWith('selecting:'),
-        ),
+        )
+        .map((node) => ({
+          ...node,
+          data: {
+            ...node.data,
+            description: node.data.status === 'error'
+              ? ERROR_NODE_DESCRIPTION
+              : node.data.description,
+          },
+        })),
       edges: (parsed.edges as Edge[]).filter(
         (edge) => !edge.source.startsWith('datasource') && !edge.target.startsWith('datasource'),
       ),
@@ -53,7 +65,13 @@ export function setStoredPlaygroundGraph(
   try {
     const payload: StoredGraph = {
       nodes: sanitizeNodes(nodes),
-      edges,
+      edges: edges.map((edge) => ({
+        ...edge,
+        data: {
+          ...edge.data,
+          animateOnCreate: undefined,
+        },
+      })),
     };
     localStorage.setItem(GRAPH_STORAGE_KEY, JSON.stringify(payload));
   } catch {

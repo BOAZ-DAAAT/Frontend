@@ -3,6 +3,7 @@ import {
   getBezierPath,
   type EdgeProps,
 } from '@xyflow/react';
+import { useEffect, useState } from 'react';
 
 import styles from './PlaygroundEdge.module.css';
 
@@ -23,6 +24,9 @@ export function PlaygroundEdge({
   data,
 }: EdgeProps) {
   const isActive = data?.flowState === 'active';
+  const [hasPendingEntrance, setHasPendingEntrance] = useState(
+    () => data?.animateOnCreate === true,
+  );
   const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
@@ -33,10 +37,22 @@ export function PlaygroundEdge({
     curvature: CURVATURE,
   });
 
+  useEffect(() => {
+    if (!isActive || !hasPendingEntrance) return undefined;
+
+    const timer = window.setTimeout(() => setHasPendingEntrance(false), 720);
+    return () => window.clearTimeout(timer);
+  }, [hasPendingEntrance, isActive]);
+
   if (isActive) {
     return (
       <>
-        <path className={styles.activeHighlight} d={edgePath} />
+        <path
+          className={`${styles.activeHighlight} ${
+            hasPendingEntrance ? styles.activeHighlightEntering : ''
+          }`}
+          d={edgePath}
+        />
         <BaseEdge
           id={id}
           path={edgePath}

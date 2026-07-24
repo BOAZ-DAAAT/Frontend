@@ -14,6 +14,15 @@ export type PlaygroundNodeStatus =
     | 'success'
     | 'error';
 
+export const ERROR_NODE_DESCRIPTION =
+    '분석 작업을 완료하지 못했습니다. 오류 내용을 확인한 뒤 다시 시도해 주세요.';
+
+export type PlaygroundNodeQuery = {
+    label: string;
+    text: string;
+    flowNodeId?: string;
+};
+
 export type PlaygroundNodeData = {
     label: string;
     description: string;
@@ -32,5 +41,7 @@ export type PlaygroundNodeData = {
     agentName?: string;
     queryLabel?: string;
     queryText?: string;
+    queryBadges?: PlaygroundNodeQuery[];
+    onFlowHover?: (nodeId: string | null) => void;
     onDeleteRun?: (runId: string, label: string) => void;
 };

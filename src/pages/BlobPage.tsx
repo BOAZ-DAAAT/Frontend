@@ -24,6 +24,7 @@ const FRAGMENT_SHADER = `
   uniform float uTheta;
   uniform float uMotion;
   uniform float uActive;
+  uniform float uError;
 
   const float ASPECT = 1.3333333;
 
@@ -194,17 +195,27 @@ const FRAGMENT_SHADER = `
 
     vec3 violetColor = mix(vec3(0.22, 0.53, 0.88), vec3(0.184, 0.988, 0.831), uActive);
     vec3 magentaColor = mix(vec3(0.12, 0.40, 0.78), vec3(0.145, 0.824, 0.737), uActive);
+    vec3 color0 = mix(vec3(0.67, 0.98, 0.97), vec3(1.00, 0.72, 0.66), uError);
+    vec3 color1 = mix(vec3(0.09, 0.86, 0.94), vec3(0.96, 0.24, 0.28), uError);
+    vec3 color2 = mix(
+      mix(vec3(0.25, 0.48, 0.97), vec3(0.20, 0.56, 0.88), uActive),
+      vec3(0.78, 0.08, 0.18),
+      uError
+    );
+    vec3 color3 = mix(violetColor, vec3(0.92, 0.18, 0.36), uError);
+    vec3 color4 = mix(magentaColor, vec3(0.54, 0.04, 0.16), uError);
     vec3 color = (
-      density0 * vec3(0.67, 0.98, 0.97)
-      + density1 * vec3(0.09, 0.86, 0.94)
-      + density2 * vec3(0.25, 0.48, 0.97)
-      + density3 * violetColor
-      + density4 * magentaColor
+      density0 * color0
+      + density1 * color1
+      + density2 * color2
+      + density3 * color3
+      + density4 * color4
     ) / max(positiveDensity, 0.0001);
 
     // Thin material becomes milky; compressed overlaps become deeper and richer.
     float materialWeight = smoothstep(0.06, 0.95, positiveDensity);
-    color = mix(vec3(0.90, 0.98, 1.0), color, 0.30 + materialWeight * 0.70);
+    vec3 thinMaterialColor = mix(vec3(0.90, 0.98, 1.0), vec3(1.0, 0.89, 0.88), uError);
+    color = mix(thinMaterialColor, color, 0.30 + materialWeight * 0.70);
     float compression = smoothstep(0.82, 2.0, positiveDensity);
     color *= 1.0 - compression * vec3(0.17, 0.11, 0.06);
 
@@ -235,6 +246,7 @@ type BlobOrbProps = {
   active?: boolean;
   motion?: number;
   speed?: number;
+  tone?: 'default' | 'error';
   label?: string;
 };
 
@@ -242,6 +254,7 @@ export function BlobOrb({
   active = true,
   motion = 1,
   speed = 1,
+  tone = 'default',
   label = '서로 흐르고 합쳐지며 상쇄되는 컬러 유체 블롭',
 }: BlobOrbProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -280,6 +293,7 @@ export function BlobOrb({
     const thetaLocation = context.getUniformLocation(program, 'uTheta');
     const motionLocation = context.getUniformLocation(program, 'uMotion');
     const activeLocation = context.getUniformLocation(program, 'uActive');
+    const errorLocation = context.getUniformLocation(program, 'uError');
     context.enableVertexAttribArray(positionLocation);
     context.vertexAttribPointer(positionLocation, 2, context.FLOAT, false, 0, 0);
     context.viewport(0, 0, WIDTH, HEIGHT);
@@ -294,6 +308,7 @@ export function BlobOrb({
       context.uniform1f(thetaLocation, theta);
       context.uniform1f(motionLocation, motion);
       context.uniform1f(activeLocation, active ? 1 : 0);
+      context.uniform1f(errorLocation, tone === 'error' ? 1 : 0);
       context.drawArrays(context.TRIANGLES, 0, 3);
     };
 
@@ -318,7 +333,7 @@ export function BlobOrb({
       context.deleteShader(vertexShader);
       context.deleteShader(fragmentShader);
     };
-  }, [active, motion, speed]);
+  }, [active, motion, speed, tone]);
 
   return (
     <canvas
@@ -337,13 +352,16 @@ export function BlobPage() {
     <main className={styles.page}>
       <div className={styles.orbRow}>
         <div className={styles.orbSlot}>
-          <BlobOrb label="빠르고 역동적으로 흐르는 컬러 유체 블롭" />
+          <BlobOrb
+            speed={0.46}
+            label="부드럽게 흐르는 활성 컬러 유체 블롭"
+          />
         </div>
         <div className={styles.orbSlot}>
           <BlobOrb
             active={false}
             motion={0.48}
-            speed={0.42}
+            speed={0.20}
             label="잔잔하고 느리게 흐르는 컬러 유체 블롭"
           />
         </div>

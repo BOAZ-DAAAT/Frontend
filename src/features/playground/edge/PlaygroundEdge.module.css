@@ -15,7 +15,7 @@
 
 .activeHighlight {
   fill: none;
-  stroke: rgb(255 255 255 / 88%);
+  stroke: rgb(255 255 255 / 96%);
   stroke-width: 4px;
   stroke-linecap: round;
   stroke-linejoin: round;
@@ -24,6 +24,43 @@
     drop-shadow(0 0 14px rgb(255 255 255 / 46%));
   opacity: 1;
   pointer-events: none;
+  animation: activeEdgeBrighten 360ms ease-out both;
+}
+
+.activeHighlightEntering {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation:
+    activeEdgeBrighten 360ms ease-out both,
+    activeEdgeDraw 720ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes activeEdgeBrighten {
+  from {
+    opacity: 0.18;
+    filter:
+      drop-shadow(0 0 1px rgb(255 255 255 / 18%))
+      drop-shadow(0 0 3px rgb(255 255 255 / 10%));
+  }
+
+  to {
+    opacity: 1;
+    filter:
+      drop-shadow(0 0 5px rgb(255 255 255 / 86%))
+      drop-shadow(0 0 14px rgb(255 255 255 / 46%));
+  }
+}
+
+@keyframes activeEdgeDraw {
+  from {
+    opacity: 0.38;
+    transform: scaleX(0);
+  }
+
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -31,5 +68,10 @@
   .activeHighlight {
     transition: none;
     animation: none;
+  }
+
+  .activeHighlight {
+    opacity: 1;
+    transform: scaleX(1);
   }
 }
