@@ -69,6 +69,7 @@ function statusFromEvent(event: RunEvent): PlaygroundNodeStatus {
   if (event.event_type === 'supervisor.selection.started') return 'selecting';
   if (event.event_type === 'agent.completed') return 'success';
   if (event.event_type === 'agent.failed') return 'error';
+  if (event.event_type === 'agent.discarded') return 'idle';
   if (event.event_type === 'agent.waiting') return 'waiting';
   return 'running';
 }
@@ -182,11 +183,6 @@ export function deriveNodeGraphFromEvents(
 
     const nodeId = metadataString(event, 'node_id');
     if (!nodeId) continue;
-    if (event.event_type === 'agent.discarded') {
-      runtimeNodes.delete(nodeId);
-      continue;
-    }
-
     const agentName = metadataString(event, 'agent_name') ?? event.node_name ?? '';
     const presentation = AGENT_PRESENTATION[agentName];
     if (!presentation) continue;

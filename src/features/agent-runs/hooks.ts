@@ -32,6 +32,16 @@ function appendEvent(events: RunEvent[], nextEvent: RunEvent): RunEvent[] {
   ));
 }
 
+function mergeEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
+  const byId = new Map(previous.map((event) => [event.event_id, event]));
+  for (const event of next) {
+    byId.set(event.event_id, event);
+  }
+  return [...byId.values()].sort((left, right) => (
+    (left.created_at ?? '').localeCompare(right.created_at ?? '')
+  ));
+}
+
 function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
   if (event.event_type === 'run.completed') return 'succeeded';
   if (event.event_type === 'run.failed') return 'failed';
@@ -120,6 +130,16 @@ export function useAgentRunStream(
 
         while (!controller.signal.aborted) {
           try {
+            const latestEvents = await listAgentRunRelatedEvents(runId);
+            if (controller.signal.aborted) return;
+            const latestCurrentRunEvents = latestEvents.filter((event) => event.run_id === runId);
+            lastEventId = latestCurrentRunEvents.at(-1)?.event_id ?? lastEventId;
+            setState((current) => ({
+              ...current,
+              events: mergeEvents(current.events, latestEvents),
+              error: null,
+            }));
+
             for await (const message of streamAgentRunEvents(runId, {
               signal: controller.signal,
               lastEventId,
