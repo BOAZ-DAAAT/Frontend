@@ -4,6 +4,7 @@ import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-editor';
 import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummaryPanel';
 import { GeneratedReportPanel } from '@/features/playground/report/GeneratedReportPanel';
+import { ReportConfirmDialog } from '@/features/playground/report/ReportConfirmDialog';
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
 import type { AgentNodeReportResponse } from '@/features/playground/report/types';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
@@ -31,7 +32,22 @@ interface PlaygroundOverlayProps {
   analysisReview: {
     eventId: string | null;
     agentName: string;
-    content: string;
+    approvalId: string;
+    question: string;
+    proposal: string;
+    rationale: string[];
+    options: {
+      id: string;
+      label: string;
+      method: string;
+      advantages: string[];
+      limitations: string[];
+      impact: string;
+      recommended: boolean;
+    }[];
+    recommendedOptionId: string;
+    allowFreeText: boolean;
+    freeTextPrompt: string;
   } | null;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
@@ -44,6 +60,9 @@ interface PlaygroundOverlayProps {
   isSubmittingApproval: boolean;
   approvalError: string | null;
   onApprovalDecision: (approved: boolean) => Promise<void>;
+  isSubmittingAnalysisReview: boolean;
+  analysisReviewError: string | null;
+  onAnalysisReviewDecision: (decision: { selectedOptionId?: string; freeText?: string }) => Promise<void>;
   nodeSummary: {
     id: string;
     label: string;
@@ -59,6 +78,9 @@ interface PlaygroundOverlayProps {
   generatedReportError: string | null;
   isGeneratingReport: boolean;
   onCloseGeneratedReport: () => void;
+  pendingReportConfirmation: { runId: string; nodeId: string; label: string } | null;
+  onConfirmReportGeneration: () => void;
+  onCancelReportGeneration: () => void;
   onBranchPromptSend: (prompt: string) => Promise<void>;
   canDeleteAllNodes: boolean;
   isDeletingAllNodes: boolean;
@@ -87,6 +109,9 @@ export function PlaygroundOverlay({
   isSubmittingApproval,
   approvalError,
   onApprovalDecision,
+  isSubmittingAnalysisReview,
+  analysisReviewError,
+  onAnalysisReviewDecision,
   nodeSummary,
   nodeSummaryData,
   nodeSummaryRunId,
@@ -97,6 +122,9 @@ export function PlaygroundOverlay({
   generatedReportError,
   isGeneratingReport,
   onCloseGeneratedReport,
+  pendingReportConfirmation,
+  onConfirmReportGeneration,
+  onCancelReportGeneration,
   onBranchPromptSend,
   canDeleteAllNodes,
   isDeletingAllNodes,
@@ -128,6 +156,14 @@ export function PlaygroundOverlay({
       {!isSessionView ? <div className={styles.nodeCreatorDock}><NodeCreator onCreate={onCreateNode} /></div> : null}
 
       {!isSessionView && isReportWorkspaceOpen ? <ReportWorkspace /> : null}
+
+      {!isSessionView && pendingReportConfirmation ? (
+        <ReportConfirmDialog
+          label={pendingReportConfirmation.label}
+          onConfirm={onConfirmReportGeneration}
+          onCancel={onCancelReportGeneration}
+        />
+      ) : null}
 
       {!isSessionView && (generatedReport || generatedReportError || isGeneratingReport) ? (
         <GeneratedReportPanel
@@ -205,6 +241,9 @@ export function PlaygroundOverlay({
           isSubmittingApproval={isSubmittingApproval}
           approvalError={approvalError}
           onApprovalDecision={onApprovalDecision}
+          isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+          analysisReviewError={analysisReviewError}
+          onAnalysisReviewDecision={onAnalysisReviewDecision}
         />
       </div> : null}
     </div>
