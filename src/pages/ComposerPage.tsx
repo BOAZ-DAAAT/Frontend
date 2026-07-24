@@ -14,6 +14,9 @@ const sharedProps = {
   isSubmittingApproval: false,
   approvalError: null,
   onApprovalDecision: noop,
+  isSubmittingAnalysisReview: false,
+  analysisReviewError: null,
+  onAnalysisReviewDecision: noop,
 };
 
 export function ComposerPage() {
@@ -82,7 +85,27 @@ export function ComposerPage() {
             analysisReview={{
               eventId: 'composer-preview-review',
               agentName: '분석 에이전트',
-              content: '분석 결과가 준비되었습니다.\n내용을 검토한 뒤 확인 또는 거부를 선택해 주세요.',
+              approvalId: 'composer-preview-review',
+              question: '어떤 방법으로 분석을 진행할까요?',
+              proposal: '배송 지연 여부에 따른 평균 리뷰 점수 차이를 비교하는 방법을 제안합니다.',
+              rationale: [
+                '그룹 간 평균 차이를 직접 비교할 수 있습니다.',
+                '표본 크기가 충분해 통계적으로 안정적입니다.',
+              ],
+              options: [
+                {
+                  id: 'welch-t-test',
+                  label: 'Welch 독립표본 t 검정',
+                  method: '지연/비지연 그룹의 평균 리뷰 점수를 비교합니다.',
+                  advantages: ['그룹 분산이 달라도 안정적입니다.'],
+                  limitations: ['인과관계를 의미하지 않습니다.'],
+                  impact: '두 그룹의 평균 차이와 신뢰구간을 제시합니다.',
+                  recommended: true,
+                },
+              ],
+              recommendedOptionId: 'welch-t-test',
+              allowFreeText: true,
+              freeTextPrompt: '다른 분석 방법을 요청하시겠어요?',
             }}
           />
         </section>
