@@ -139,6 +139,10 @@
   padding: 2.25rem;
 }
 
+.structuredContent {
+  color: #202124;
+}
+
 .metaRow {
   display: flex;
   align-items: baseline;
@@ -168,6 +172,144 @@
   font-weight: var(--font-semibold);
   line-height: var(--leading-tight);
   letter-spacing: 0;
+}
+
+.reportEyebrow {
+  margin: 1.35rem 0 0;
+  color: #777;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.14em;
+}
+
+.abstract {
+  margin: 0.85rem 0 0;
+  color: #555;
+  font-size: var(--text-base);
+  line-height: 1.75;
+}
+
+.reportSection {
+  margin-top: 2.25rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid rgb(32 33 36 / 13%);
+}
+
+.sectionKicker {
+  margin: 0 0 0.45rem;
+  color: #777;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.12em;
+}
+
+.reportSection h3 {
+  margin: 0;
+  color: #1f1f1f;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
+}
+
+.sectionBody {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+  color: #303631;
+  font-size: var(--text-base);
+  line-height: 1.78;
+}
+
+.sectionBody p,
+.sectionBody ul {
+  margin: 0;
+}
+
+.sectionBody ul {
+  padding-left: 1.2rem;
+}
+
+.sectionBody li + li {
+  margin-top: 0.45rem;
+}
+
+.formalLead {
+  color: #666;
+  font-weight: var(--font-medium);
+}
+
+.findingStack,
+.evidenceTableStack,
+.chartGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.findingCard {
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem 0;
+  border-top: 1px solid rgb(52 52 52 / 8%);
+  background: transparent;
+}
+
+.findingCard h4 {
+  margin: 0;
+  color: #1f1f1f;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  line-height: 1.45;
+}
+
+.findingSource {
+  color: #777;
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+.chartImage {
+  width: 100%;
+  max-height: 22rem;
+  object-fit: contain;
+  border: 1px solid rgb(32 33 36 / 10%);
+  border-radius: 0.55rem;
+  background: #fff;
+}
+
+.chartFallback {
+  padding: 0.9rem 1rem;
+  border: 1px dashed rgb(52 52 52 / 18%);
+  border-radius: 0.55rem;
+  background: rgb(52 52 52 / 4%);
+  color: #777;
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+}
+
+.evidenceTableCard {
+  overflow: hidden;
+  border: 1px solid rgb(32 33 36 / 10%);
+  border-radius: 0.55rem;
+  background: rgb(255 255 255 / 64%);
+}
+
+.evidenceTableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.95rem;
+  border-bottom: 1px solid rgb(32 33 36 / 8%);
+  color: #1f1f1f;
+  font-size: var(--text-sm);
+}
+
+.evidenceTableHeader span {
+  color: #666;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.72rem;
 }
 
 .markdown {
@@ -217,8 +359,60 @@
   padding: 0.08rem 0.25rem;
   border-radius: 0.25rem;
   background: rgb(52 52 52 / 8%);
+  color: #3d3d3d;
   font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
   font-size: 0.92em;
+}
+
+.codeChip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  padding: 0.1rem 0.34rem;
+  border: 1px solid rgb(52 52 52 / 9%);
+  border-radius: 0.35rem;
+  background: rgb(52 52 52 / 7%);
+  color: #3d3d3d;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.86em;
+  font-weight: var(--font-medium);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.codeBlock,
+.sqlCodeBlock {
+  max-width: 100%;
+  margin: 0.85rem 0 0;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid rgb(52 52 52 / 12%);
+  border-radius: 0.5rem;
+  background: #202124;
+  color: #f7f1e8;
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: var(--text-sm);
+  line-height: 1.6;
+  white-space: pre;
+  box-shadow: none;
+}
+
+.sqlKeyword {
+  color: #8ab4f8;
+  font-weight: var(--font-semibold);
+}
+
+.sqlString {
+  color: #e59b7a;
+}
+
+.sqlNumber {
+  color: #f28b82;
+}
+
+.sqlComment {
+  color: #9aa0a6;
+  font-style: italic;
 }
 
 .tableWrap {

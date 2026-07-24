@@ -1,9 +1,13 @@
+import type { GeneratedReport } from './types';
+
 export type Report = {
   id: string;
   title: string;
   author: string;
   date: string;
   markdown: string;
+  runId?: string;
+  generated?: GeneratedReport;
 };
 
 export const reports: Report[] = [

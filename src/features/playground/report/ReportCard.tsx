@@ -1,5 +1,6 @@
 import {
   Fragment,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -8,7 +9,10 @@ import {
 } from 'react';
 import { FileText, X, type LucideIcon } from 'lucide-react';
 
+import { getAgentRunArtifactContent } from '@/features/playground/node-summary/api';
+
 import type { Report } from './reportData';
+import type { GeneratedReport, ReportEvidenceTable } from './types';
 import styles from './ReportCard.module.css';
 
 type ReportCardProps = {
@@ -39,15 +43,35 @@ function formatInlineMarkdown(text: string): ReactNode[] {
 
   return parts.map((part, index) => {
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index}>{part.slice(2, -2)}</strong>;
+      return <strong key={index}>{renderCodeTerms(part.slice(2, -2), `bold-${index}`)}</strong>;
     }
 
     if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={index}>{part.slice(1, -1)}</code>;
+      return <code key={index} className={styles.codeChip}>{part.slice(1, -1)}</code>;
     }
 
-    return <Fragment key={index}>{part}</Fragment>;
+    return <Fragment key={index}>{renderCodeTerms(part, `plain-${index}`)}</Fragment>;
   });
+}
+
+function renderCodeTerms(text: string, keyPrefix: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const pattern = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    nodes.push(
+      <code key={`${keyPrefix}-${match.index}-${match[0]}`} className={styles.codeChip}>
+        {match[0]}
+      </code>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes.length ? nodes : [text];
 }
 
 function parseTable(lines: string[], startIndex: number) {
@@ -68,6 +92,40 @@ function parseTable(lines: string[], startIndex: number) {
   }
 
   return { rows, nextIndex: index };
+}
+
+const SQL_TOKEN_PATTERN = /(--.*?$|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|"(?:[^"]|"")*"|\b(?:ADD|ALTER|AND|AS|ASC|AVG|BY|CASE|CAST|COUNT|CREATE|DATE|DATE_FORMAT|DAY|DELETE|DESC|DISTINCT|ELSE|END|FROM|GROUP|HAVING|IN|INNER|INSERT|INTO|IS|JOIN|LEFT|LIMIT|MAX|MIN|NOT|NULL|ON|OR|ORDER|OUTER|OVER|PARTITION|RIGHT|ROW_NUMBER|SELECT|SET|SUM|TABLE|THEN|TIMESTAMPDIFF|UPDATE|WHEN|WHERE|WITH)\b|\b\d+(?:\.\d+)?\b)/gim;
+
+function sqlTokenClassName(token: string) {
+  if (token.startsWith('--') || token.startsWith('/*')) return styles.sqlComment;
+  if (token.startsWith("'") || token.startsWith('"')) return styles.sqlString;
+  if (/^\d/.test(token)) return styles.sqlNumber;
+  return styles.sqlKeyword;
+}
+
+function SqlCodeBlock({ code }: { code: string }) {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  SQL_TOKEN_PATTERN.lastIndex = 0;
+
+  while ((match = SQL_TOKEN_PATTERN.exec(code)) !== null) {
+    if (match.index > lastIndex) nodes.push(code.slice(lastIndex, match.index));
+    nodes.push(
+      <span key={`${match.index}-${match[0]}`} className={sqlTokenClassName(match[0])}>
+        {match[0]}
+      </span>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < code.length) nodes.push(code.slice(lastIndex));
+
+  return (
+    <pre className={styles.sqlCodeBlock}>
+      <code>{nodes}</code>
+    </pre>
+  );
 }
 
 function MarkdownContent({ markdown }: { markdown: string }) {
@@ -101,6 +159,27 @@ function MarkdownContent({ markdown }: { markdown: string }) {
     if (!line) {
       flushParagraph();
       flushList();
+      continue;
+    }
+
+    if (line.startsWith('```')) {
+      flushParagraph();
+      flushList();
+      const language = line.slice(3).trim().toLowerCase();
+      const codeLines: string[] = [];
+      index += 1;
+      while (index < lines.length && !lines[index].trim().startsWith('```')) {
+        codeLines.push(lines[index]);
+        index += 1;
+      }
+      const code = codeLines.join('\n');
+      blocks.push(language === 'sql'
+        ? <SqlCodeBlock key={`code-${blocks.length}`} code={code} />
+        : (
+          <pre key={`code-${blocks.length}`} className={styles.codeBlock}>
+            <code>{code}</code>
+          </pre>
+        ));
       continue;
     }
 
@@ -168,7 +247,216 @@ function MarkdownContent({ markdown }: { markdown: string }) {
   return <div className={styles.markdown}>{blocks}</div>;
 }
 
+function ReportParagraphs({ text }: { text: string }) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return (
+    <>
+      {paragraphs.map((paragraph, index) => (
+        <p key={index}>{formatInlineMarkdown(paragraph)}</p>
+      ))}
+    </>
+  );
+}
+
+function ReportSection({
+  kicker,
+  title,
+  children,
+}: {
+  kicker: string;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className={styles.reportSection}>
+      <p className={styles.sectionKicker}>{kicker}</p>
+      <h3>{title}</h3>
+      <div className={styles.sectionBody}>{children}</div>
+    </section>
+  );
+}
+
+function ReportChartImage({ runId, artifactId }: { runId?: string; artifactId: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    setImageUrl(null);
+    setHasError(false);
+    if (!runId) {
+      setHasError(true);
+      return () => undefined;
+    }
+
+    void getAgentRunArtifactContent(runId, artifactId)
+      .then((blob) => {
+        if (cancelled) return;
+        objectUrl = URL.createObjectURL(blob);
+        setImageUrl(objectUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setHasError(true);
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [artifactId, runId]);
+
+  if (hasError) {
+    return <div className={styles.chartFallback}>차트 artifact를 불러오지 못했습니다. ({artifactId})</div>;
+  }
+  if (!imageUrl) {
+    return <div className={styles.chartFallback}>차트를 불러오는 중입니다.</div>;
+  }
+  return <img className={styles.chartImage} src={imageUrl} alt="report chart artifact" />;
+}
+
+function EvidenceTableView({ table }: { table: ReportEvidenceTable }) {
+  const rows = table.rows.slice(0, 5);
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  if (!rows.length || !columns.length) return null;
+
+  return (
+    <article className={styles.evidenceTableCard}>
+      <div className={styles.evidenceTableHeader}>
+        <strong>{table.title}</strong>
+        {table.source_label || table.stage ? (
+          <span>{table.source_label ?? table.stage}</span>
+        ) : null}
+      </div>
+      <div className={styles.tableWrap}>
+        <table>
+          <thead>
+            <tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>
+                {columns.map((column) => (
+                  <td key={column}>{String(row[column] ?? '')}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </article>
+  );
+}
+
+function findingSortPriority(heading: string) {
+  const normalized = heading.toLowerCase();
+  if (normalized.includes('퍼널') || normalized.includes('병목') || normalized.includes('funnel')) return 0;
+  if (normalized.includes('방법') || normalized.includes('검정') || normalized.includes('진단')) return 1;
+  return 2;
+}
+
+function orderedFindings(findings: GeneratedReport['key_findings']) {
+  return findings
+    .map((finding, index) => ({ finding, index }))
+    .sort((left, right) => {
+      const priorityDiff = findingSortPriority(left.finding.heading) - findingSortPriority(right.finding.heading);
+      return priorityDiff || left.index - right.index;
+    })
+    .map(({ finding }) => finding);
+}
+
+function StructuredReportContent({ report, generated }: { report: Report; generated: GeneratedReport }) {
+  const evidenceTables = generated.evidence_tables ?? [];
+  const findings = orderedFindings(generated.key_findings);
+
+  return (
+    <div className={`${styles.content} ${styles.structuredContent}`}>
+      <div className={styles.metaRow}>
+        <span className={styles.author}>{report.author}</span>
+        <time className={styles.date}>{report.date}</time>
+      </div>
+
+      <p className={styles.reportEyebrow}>DAAAT · NODE REPORT</p>
+      <h2 className={styles.title}>{generated.title}</h2>
+      <p className={styles.abstract}>{generated.key_finding}</p>
+
+      <ReportSection kicker="EXECUTIVE SUMMARY" title="핵심 요약">
+        <p className={styles.formalLead}>본 분석은 다음의 핵심 결과를 확인합니다.</p>
+        <ReportParagraphs text={generated.executive_summary} />
+      </ReportSection>
+
+      <ReportSection kicker="BACKGROUND" title="배경 및 질문">
+        <ReportParagraphs text={generated.background_and_question} />
+      </ReportSection>
+
+      <ReportSection kicker="METHODOLOGY" title="방법론">
+        <p className={styles.formalLead}>이에 본 보고서는 산출된 마트와 탐색 결과를 기반으로 후속 검정 및 해석 절차를 수행합니다.</p>
+        <ReportParagraphs text={generated.methodology_narrative} />
+      </ReportSection>
+
+      <ReportSection kicker="MAIN ANALYSIS" title="본 분석">
+        <div className={styles.findingStack}>
+          {findings.map((finding, index) => (
+            <article key={`${finding.heading}-${index}`} className={styles.findingCard}>
+              <h4>{formatInlineMarkdown(finding.heading)}</h4>
+              {finding.source_label ? <p className={styles.findingSource}>{finding.source_label}</p> : null}
+              <ReportParagraphs text={finding.body} />
+              {finding.chart_artifact_ids.length ? (
+                <div className={styles.chartGrid}>
+                  {finding.chart_artifact_ids.map((artifactId) => (
+                    <ReportChartImage key={artifactId} runId={report.runId} artifactId={artifactId} />
+                  ))}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </ReportSection>
+
+      {evidenceTables.length ? (
+        <ReportSection kicker="EVIDENCE DATA" title="근거 데이터">
+          <p className={styles.formalLead}>아래 표는 각 아티팩트에서 확인된 정형 근거의 상위 5행입니다.</p>
+          <div className={styles.evidenceTableStack}>
+            {evidenceTables.map((table, index) => (
+              <EvidenceTableView key={`${table.title}-${index}`} table={table} />
+            ))}
+          </div>
+        </ReportSection>
+      ) : null}
+
+      {generated.code_used.trim() ? (
+        <ReportSection kicker="SQL" title="사용한 쿼리">
+          <SqlCodeBlock code={generated.code_used.trim()} />
+        </ReportSection>
+      ) : null}
+
+      {generated.limitations.length ? (
+        <ReportSection kicker="CAVEATS" title="한계 및 유의사항">
+          <ul>
+            {generated.limitations.map((item, index) => (
+              <li key={`${item}-${index}`}>{formatInlineMarkdown(item)}</li>
+            ))}
+          </ul>
+        </ReportSection>
+      ) : null}
+
+      <ReportSection kicker="CONCLUSION" title="결론 및 제언">
+        <ReportParagraphs text={generated.conclusion_and_recommendations} />
+      </ReportSection>
+    </div>
+  );
+}
+
 function ReportContent({ report }: { report: Report }) {
+  if (report.generated) {
+    return <StructuredReportContent report={report} generated={report.generated} />;
+  }
+
   return (
     <div className={styles.content}>
       <div className={styles.metaRow}>

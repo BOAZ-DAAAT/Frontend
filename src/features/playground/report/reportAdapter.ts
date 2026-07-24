@@ -11,17 +11,17 @@ function reportMarkdown(report: GeneratedReport) {
   )).join('\n\n');
   const limitations = report.limitations.map((item) => `- ${item}`).join('\n');
   const code = report.code_used.trim()
-    ? `## 사용한 코드\n\n\`\`\`sql\n${report.code_used.trim()}\n\`\`\``
+    ? `## 사용한 SQL\n\n\`\`\`sql\n${report.code_used.trim()}\n\`\`\``
     : '';
 
   return [
-    section('요약', report.executive_summary),
-    section('배경과 질문', report.background_and_question),
-    section('분석 방법', report.methodology_narrative),
-    section('주요 발견', findings),
+    section('핵심 요약', report.executive_summary),
+    section('배경 및 질문', report.background_and_question),
+    section('방법론', report.methodology_narrative),
+    section('본 분석', findings),
     code,
-    section('한계', limitations),
-    section('결론 및 제안', report.conclusion_and_recommendations),
+    section('한계 및 유의사항', limitations),
+    section('결론 및 제언', report.conclusion_and_recommendations),
   ].filter(Boolean).join('\n\n');
 }
 
@@ -42,5 +42,7 @@ export function toUiReport(item: AgentReportListItem): Report {
     author: 'Report Agent',
     date: formatDate(item.created_at),
     markdown: reportMarkdown(item.report),
+    runId: item.run_id,
+    generated: item.report,
   };
 }

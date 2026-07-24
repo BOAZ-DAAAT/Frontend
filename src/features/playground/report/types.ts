@@ -5,6 +5,13 @@ export type ReportFindingSection = {
   chart_artifact_ids: string[];
 };
 
+export type ReportEvidenceTable = {
+  title: string;
+  stage?: string;
+  source_label?: string | null;
+  rows: Record<string, unknown>[];
+};
+
 export type GeneratedReport = {
   title: string;
   executive_summary: string;
@@ -12,6 +19,7 @@ export type GeneratedReport = {
   methodology_narrative: string;
   code_used: string;
   key_findings: ReportFindingSection[];
+  evidence_tables?: ReportEvidenceTable[];
   limitations: string[];
   conclusion_and_recommendations: string;
   key_finding: string;
