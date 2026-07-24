@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { BackendApiError } from '@/lib/apiClient';
@@ -67,13 +67,17 @@ function reconnectDelay(signal: AbortSignal): Promise<void> {
 export function useAgentRunStream(
   runId: string | null,
   { enabled = true }: UseAgentRunStreamOptions = {},
-): AgentRunStreamState {
+): AgentRunStreamState & { reconnect: () => void } {
   const [state, setState] = useState<AgentRunStreamState>({
     run: null,
     events: [],
     isStreaming: false,
     error: null,
   });
+  const [connectionRevision, setConnectionRevision] = useState(0);
+  const reconnect = useCallback(() => {
+    setConnectionRevision((revision) => revision + 1);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -184,7 +188,7 @@ export function useAgentRunStream(
 
     void connect();
     return () => controller.abort();
-  }, [enabled, runId]);
+  }, [connectionRevision, enabled, runId]);
 
-  return state;
+  return { ...state, reconnect };
 }
