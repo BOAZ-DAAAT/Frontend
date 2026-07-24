@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { listSessionTables } from '@/features/session/api';
 import { getCurrentSessionId } from '@/features/session/currentSession';
 import { listAgentReports } from '@/features/playground/report/api';
+import { setCachedReports } from '@/features/playground/report/reportCache';
 import { toUiReport } from '@/features/playground/report/reportAdapter';
 import { REPORTS_UPDATED_EVENT } from '@/features/playground/report/reportEvents';
 
@@ -42,8 +43,10 @@ export function useSidebarData(): SidebarSection[] {
                     },
                 ];
 
-                const reportItems = reportResponse.reports.map((storedReport) => {
-                    const report = toUiReport(storedReport);
+                const reports = reportResponse.reports.map(toUiReport);
+                setCachedReports(sessionId, reports);
+
+                const reportItems = reports.map((report) => {
                     return {
                         id: report.id,
                         label: report.title,

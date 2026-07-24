@@ -13,7 +13,8 @@ import { getCurrentSessionId } from '@/features/session/currentSession';
 
 import { listAgentReports } from './api';
 import { ReportCard } from './ReportCard';
-import { reports, type Report } from './reportData';
+import { getCachedReports, setCachedReports } from './reportCache';
+import type { Report } from './reportData';
 import { toUiReport } from './reportAdapter';
 import { REPORTS_UPDATED_EVENT } from './reportEvents';
 import styles from './ReportWorkspace.module.css';
@@ -22,6 +23,7 @@ const COLUMN_COUNT = 3;
 const STAGGER_STEP_MS = 36;
 const MAX_STAGGER_SPAN_MS = 240;
 const REPORT_MOTION_DURATION_MS = 560;
+const SELECTED_REPORT_MOTION_DURATION_MS = 620;
 const REPORT_MOTION_EASING = 'cubic-bezier(0.16, 1, 0.3, 1)';
 const REPORT_EXIT_EASING = 'cubic-bezier(0.4, 0.12, 0.7, 1)';
 
@@ -105,7 +107,12 @@ function createReportTransitionStyles(reportItems: ReportItem[]) {
 }
 
 ::view-transition-old(${transitionName}) {
-  animation: report-list-exit-down ${REPORT_MOTION_DURATION_MS}ms ${REPORT_EXIT_EASING} 0ms both;
+  animation:
+    report-list-exit-down
+    var(--report-list-exit-duration, ${REPORT_MOTION_DURATION_MS}ms)
+    var(--report-list-exit-easing, ${REPORT_EXIT_EASING})
+    0ms
+    both;
 }
 
 ::view-transition-new(${transitionName}) {
@@ -149,10 +156,14 @@ ${transitionRules}
 }
 
 export function ReportWorkspace() {
-  const { selectedItemId, collapse } = useSidebar();
-  const [availableReports, setAvailableReports] = useState<Report[]>(reports);
+  const { selectedItemId, beginCollapse, collapse } = useSidebar();
+  const [availableReports, setAvailableReports] = useState<Report[]>(() => {
+    const sessionId = getCurrentSessionId();
+    return sessionId ? getCachedReports(sessionId) : [];
+  });
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [transitionReportId, setTransitionReportId] = useState<string | null>(null);
+  const [isClosingWorkspace, setIsClosingWorkspace] = useState(false);
   const previousSidebarSelectionRef = useRef(selectedItemId);
   const transitionInProgressRef = useRef(false);
 
@@ -172,10 +183,12 @@ export function ReportWorkspace() {
     const loadReports = () => {
       void listAgentReports(sessionId)
         .then((response) => {
-          if (!cancelled) setAvailableReports(response.reports.map(toUiReport));
+          if (cancelled) return;
+          const nextReports = response.reports.map(toUiReport);
+          setAvailableReports(setCachedReports(sessionId, nextReports));
         })
         .catch(() => {
-          // 기존 목업은 연결 전 화면을 위해 유지한다.
+          // 실제 리포트를 불러오지 못하면 빈 목록을 유지한다.
         });
     };
 
@@ -232,7 +245,7 @@ export function ReportWorkspace() {
       window.cancelAnimationFrame(frame);
       animations.forEach((animation) => animation.cancel());
     };
-  }, []);
+  }, [reportItems]);
 
   const runReportTransition = useCallback((reportId: string, nextReportId: string | null) => {
     if (transitionInProgressRef.current) return;
@@ -295,13 +308,57 @@ export function ReportWorkspace() {
 
   const selectedReport = availableReports.find((report) => report.id === selectedReportId) ?? null;
 
+  const closeReportWorkspace = () => {
+    if (transitionInProgressRef.current) return;
+
+    const transitionDocument = document as ViewTransitionDocument;
+    const startViewTransition = transitionDocument.startViewTransition?.bind(transitionDocument);
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (!startViewTransition || prefersReducedMotion || !reportItems.length) {
+      collapse();
+      return;
+    }
+
+    transitionInProgressRef.current = true;
+    updateReportTravelOffsets();
+    flushSync(beginCollapse);
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty(
+      '--report-list-exit-duration',
+      `${SELECTED_REPORT_MOTION_DURATION_MS}ms`,
+    );
+    rootStyle.setProperty('--report-list-exit-easing', REPORT_MOTION_EASING);
+
+    const clearWorkspaceExitTiming = () => {
+      rootStyle.removeProperty('--report-list-exit-duration');
+      rootStyle.removeProperty('--report-list-exit-easing');
+    };
+
+    try {
+      const transition = startViewTransition(() => {
+        flushSync(() => setIsClosingWorkspace(true));
+      });
+
+      transition.finished.finally(() => {
+        clearWorkspaceExitTiming();
+        transitionInProgressRef.current = false;
+        collapse();
+      });
+    } catch {
+      clearWorkspaceExitTiming();
+      transitionInProgressRef.current = false;
+      collapse();
+    }
+  };
+
   const handleBackgroundClick = () => {
     if (selectedReportId) {
       closeSelectedReport();
       return;
     }
 
-    collapse();
+    closeReportWorkspace();
   };
 
   return (
@@ -309,7 +366,9 @@ export function ReportWorkspace() {
       <style>{reportTransitionStyles}</style>
 
       <div
-        className={styles.blurLayer}
+        className={`${styles.blurLayer} ${
+          isClosingWorkspace ? styles.blurLayerClosing : ''
+        }`}
         aria-hidden="true"
         onClick={handleBackgroundClick}
       />
@@ -326,7 +385,7 @@ export function ReportWorkspace() {
           </div>
         ) : (
           <div className={styles.gallery}>
-            {reportColumns.map((column, columnIndex) => (
+            {!isClosingWorkspace ? reportColumns.map((column, columnIndex) => (
               <div key={columnIndex} className={styles.reportColumn}>
                 {column.map(({ order, report, transitionName }) => (
                   <ReportCard
@@ -344,7 +403,7 @@ export function ReportWorkspace() {
                   />
                 ))}
               </div>
-            ))}
+            )) : null}
           </div>
         )}
       </div>

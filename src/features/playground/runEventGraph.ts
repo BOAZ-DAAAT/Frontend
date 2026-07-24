@@ -22,12 +22,11 @@ const LIFECYCLE_EVENTS = new Set([
   'agent.failed',
 ]);
 
-const STAGE_DEPTH_BY_AGENT: Record<string, number> = {
-  sql_agent: 1,
-  eda_agent: 2,
-  analysis_agent: 3,
-  insight: 4,
-};
+const TERMINAL_RUN_EVENTS = new Set([
+  'run.completed',
+  'run.failed',
+  'run.cancelled',
+]);
 
 const NODE_X_GAP = 460;
 const LANE_Y_START = 120;
@@ -39,6 +38,12 @@ type RuntimeNode = Node<PlaygroundNodeData> & {
     parentNodeId: string | null;
     agentName: string;
   };
+};
+
+type RunVisualState = {
+  latestLifecycleEvent: string | null;
+  parentNodeId: string | null;
+  terminal: boolean;
 };
 
 function metadataString(event: RunEvent, key: string): string | null {
@@ -99,14 +104,35 @@ function queryInfoFromEvent(event: RunEvent): { label: string; text: string } | 
 
 export function deriveNodeGraphFromEvents(
   events: RunEvent[],
-  baseNodes: Node<PlaygroundNodeData>[],
+  _baseNodes: Node<PlaygroundNodeData>[],
   _baseEdges: Edge[],
+  pendingRunId: string | null = null,
 ): { nodes: Node<PlaygroundNodeData>[]; edges: Edge[] } {
-  const datasource = baseNodes.find((node) => node.id === 'datasource');
   const runtimeNodes = new Map<string, RuntimeNode>();
   const queryByRunId = new Map<string, { label: string; text: string }>();
+  const runVisualState = new Map<string, RunVisualState>();
+  const runOrder: string[] = [];
 
   for (const event of events) {
+    let visualState = runVisualState.get(event.run_id);
+    if (!visualState) {
+      visualState = {
+        latestLifecycleEvent: null,
+        parentNodeId: null,
+        terminal: false,
+      };
+      runVisualState.set(event.run_id, visualState);
+      runOrder.push(event.run_id);
+    }
+    if (LIFECYCLE_EVENTS.has(event.event_type)) {
+      visualState.latestLifecycleEvent = event.event_type;
+    }
+    if (TERMINAL_RUN_EVENTS.has(event.event_type)) {
+      visualState.terminal = true;
+    }
+    visualState.parentNodeId = metadataString(event, 'parent_node_id')
+      ?? visualState.parentNodeId;
+
     const queryInfo = queryInfoFromEvent(event);
     if (queryInfo && !queryByRunId.has(event.run_id)) {
       queryByRunId.set(event.run_id, queryInfo);
@@ -153,21 +179,23 @@ export function deriveNodeGraphFromEvents(
     });
   }
 
+  if (pendingRunId && !runVisualState.has(pendingRunId)) {
+    runVisualState.set(pendingRunId, {
+      latestLifecycleEvent: null,
+      parentNodeId: null,
+      terminal: false,
+    });
+    runOrder.push(pendingRunId);
+  }
+
   const orderedRuntimeNodes = [...runtimeNodes.values()].sort(
     (left, right) => left.data.nodeSequence - right.data.nodeSequence,
   );
   const laneByRunId = new Map<string, number>();
   const firstNodeIdByRunId = new Map<string, string>();
+  const positionedNodeById = new Map<string, RuntimeNode>();
+  const previousNodeIdByRunId = new Map<string, string>();
   const positionedNodes: RuntimeNode[] = [];
-  // parentNodeId가 없는(=분기가 아니라 새 메인 쿼리로 시작한) run만 자기 Data Source를 갖는다.
-  const mainRunIds: string[] = [];
-  const seenMainRunIds = new Set<string>();
-  for (const node of orderedRuntimeNodes) {
-    if (node.data.parentNodeId !== null || !node.data.runId || seenMainRunIds.has(node.data.runId)) continue;
-    seenMainRunIds.add(node.data.runId);
-    mainRunIds.push(node.data.runId);
-  }
-
   for (const node of orderedRuntimeNodes) {
     const runId = node.data.runId ?? node.id;
     let laneIndex = laneByRunId.get(runId);
@@ -178,12 +206,18 @@ export function deriveNodeGraphFromEvents(
     if (!firstNodeIdByRunId.has(runId)) {
       firstNodeIdByRunId.set(runId, node.id);
     }
-    const depth = STAGE_DEPTH_BY_AGENT[node.data.agentName] ?? node.data.nodeSequence;
+    const requestedParent = node.data.parentNodeId;
+    const previousNodeId = previousNodeIdByRunId.get(runId);
+    const sourceNode = requestedParent
+      ? positionedNodeById.get(requestedParent)
+      : previousNodeId
+        ? positionedNodeById.get(previousNodeId)
+        : undefined;
     const queryInfo = firstNodeIdByRunId.get(runId) === node.id ? queryByRunId.get(runId) : undefined;
-    positionedNodes.push({
+    const positionedNode = {
       ...node,
       position: {
-        x: depth * NODE_X_GAP,
+        x: sourceNode ? sourceNode.position.x + NODE_X_GAP : 0,
         y: LANE_Y_START + laneIndex * LANE_Y_GAP,
       },
       data: {
@@ -191,42 +225,86 @@ export function deriveNodeGraphFromEvents(
         queryLabel: queryInfo?.label,
         queryText: queryInfo?.text,
       },
-    });
+    };
+    positionedNodes.push(positionedNode);
+    positionedNodeById.set(node.id, positionedNode);
+    previousNodeIdByRunId.set(runId, node.id);
+  }
+
+  for (const runId of runOrder) {
+    const visualState = runVisualState.get(runId);
+    if (
+      !visualState
+      || visualState.terminal
+      || !(
+        visualState.latestLifecycleEvent === null
+        || visualState.latestLifecycleEvent === 'agent.completed'
+      )
+    ) {
+      continue;
+    }
+
+    let laneIndex = laneByRunId.get(runId);
+    if (laneIndex === undefined) {
+      laneIndex = laneByRunId.size;
+      laneByRunId.set(runId, laneIndex);
+    }
+
+    const previousNodeId = previousNodeIdByRunId.get(runId);
+    const requestedParentId = previousNodeId ?? visualState.parentNodeId;
+    const sourceNode = requestedParentId
+      ? positionedNodeById.get(requestedParentId)
+      : undefined;
+    const previousSequence = sourceNode?.data.nodeSequence ?? 0;
+    const queryInfo = queryByRunId.get(runId);
+    const selectingNode: RuntimeNode = {
+      id: `selecting:${runId}`,
+      type: 'playground',
+      position: {
+        x: sourceNode ? sourceNode.position.x + NODE_X_GAP : 0,
+        y: LANE_Y_START + laneIndex * LANE_Y_GAP,
+      },
+      data: {
+        label: '다음 Agent 선택 중',
+        description: '분석 계획과 현재 근거를 검토하고 있습니다.',
+        kind: 'supervisor',
+        status: 'selecting',
+        eventType: 'supervisor.selecting',
+        lastMessage: '다음 Agent를 선택하고 있습니다.',
+        runId,
+        nodeSequence: previousSequence + 1,
+        parentNodeId: requestedParentId ?? null,
+        agentName: 'supervisor',
+        queryLabel: previousNodeId ? undefined : queryInfo?.label,
+        queryText: previousNodeId ? undefined : queryInfo?.text,
+      },
+    };
+    positionedNodes.push(selectingNode);
+    positionedNodeById.set(selectingNode.id, selectingNode);
+    previousNodeIdByRunId.set(runId, selectingNode.id);
   }
 
   const executionNodes = positionedNodes;
-  // 메인 쿼리로 시작한 run마다(분기 제외) 자기 Data Source 노드를 하나씩 둔다.
-  const datasourceNodes: Node<PlaygroundNodeData>[] = datasource
-    ? (mainRunIds.length > 0
-        ? mainRunIds.map((runId) => ({
-            ...datasource,
-            id: `datasource:${runId}`,
-            position: { x: 0, y: LANE_Y_START + (laneByRunId.get(runId) ?? 0) * LANE_Y_GAP },
-            data: { ...datasource.data, runId },
-          }))
-        : [datasource])
-    : [];
-  const nodes = [...datasourceNodes, ...executionNodes];
+  const nodes = executionNodes;
   const visibleIds = new Set(nodes.map((node) => node.id));
-  const runIdByNodeId = new Map(executionNodes.map((node) => [node.id, node.data.runId]));
-  const edges = executionNodes.map((node) => {
+  const edgePreviousNodeIdByRunId = new Map<string, string>();
+  const edges = executionNodes.flatMap((node) => {
     const requestedParent = node.data.parentNodeId;
-    const fallbackSource = node.data.runId ? `datasource:${node.data.runId}` : 'datasource';
-    let source = requestedParent && visibleIds.has(requestedParent)
+    const runId = node.data.runId;
+    const source = requestedParent && visibleIds.has(requestedParent)
       ? requestedParent
-      : fallbackSource;
+      : runId
+        ? edgePreviousNodeIdByRunId.get(runId)
+        : undefined;
+    if (runId) edgePreviousNodeIdByRunId.set(runId, node.id);
+    if (!source || source === node.id) return [];
 
-    // SQL 단계에서 분기한 노드는 직전 SQL 노드가 아니라, 그 노드가 속한 run의 Data
-    // Source에서 바로 뻗어나온다(SQL 분기는 upstream 데이터를 재사용하지 않으므로).
-    if (node.data.agentName === 'sql_agent' && requestedParent) {
-      const rootRunId = runIdByNodeId.get(requestedParent) ?? node.data.runId;
-      const rootDatasourceId = rootRunId ? `datasource:${rootRunId}` : null;
-      if (rootDatasourceId && visibleIds.has(rootDatasourceId)) {
-        source = rootDatasourceId;
-      }
-    }
-    const isActive = node.data.status === 'running';
-    return {
+    const isActive = (
+      node.data.status === 'selecting'
+      || node.data.status === 'running'
+      || node.data.status === 'waiting'
+    );
+    return [{
       id: `${source}-to-${node.id}`,
       source,
       target: node.id,
@@ -235,7 +313,7 @@ export function deriveNodeGraphFromEvents(
       animated: false,
       zIndex: isActive ? 10 : 0,
       data: { flowState: isActive ? 'active' : 'idle' },
-    } satisfies Edge;
+    } satisfies Edge];
   });
 
   return { nodes, edges };

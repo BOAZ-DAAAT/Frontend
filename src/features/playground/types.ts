@@ -1,12 +1,14 @@
 export type PlaygroundNodeKind =
-    'datasource'
+    'supervisor'
+    | 'datasource'
     | 'sql-agent'
     | 'EDA-agent'
     | 'analysis-agent'
     | 'insight-agent';
 
 export type PlaygroundNodeStatus =
-    'idle'
+    'selecting'
+    | 'idle'
     | 'running'
     | 'waiting'
     | 'success'
@@ -25,6 +27,9 @@ export type PlaygroundNodeData = {
     lastMessage?: string;
     lastEventAt?: string;
     runId?: string;
+    parentNodeId?: string | null;
+    nodeSequence?: number;
+    agentName?: string;
     queryLabel?: string;
     queryText?: string;
     onDeleteRun?: (runId: string, label: string) => void;

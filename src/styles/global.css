@@ -35,9 +35,9 @@
 
   --color-brand-primary: #343434;
 
-  --color-background: #c3cbe0;
+  --color-background: #becde5;
   --color-background-dot: #ffffff;
-  --wave-background-gradient: linear-gradient(145deg, #c3cbe0 0%, #aab6cf 100%);
+  --wave-background-gradient: linear-gradient(145deg, #becde5 0%, #a2b7d3 100%);
 
   --color-surface: rgb(255 255 255 / 60%);
   --color-surface-solid: #ffffff;
@@ -47,7 +47,7 @@
   --color-flow-active: #343434;
   --color-flow-active-rgb: 143 155 216;
 
-  --effect-surface-blur: blur(4px);
+  --effect-surface-blur: blur(8px);
 
 }
 

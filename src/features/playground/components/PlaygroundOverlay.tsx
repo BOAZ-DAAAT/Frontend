@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import { AccountStack } from '@/features/playground/account/AccountStack';
 import { LoaderCircle, Trash2 } from 'lucide-react';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
@@ -25,19 +27,34 @@ interface PlaygroundOverlayProps {
   onPromptSend: (prompt: string) => Promise<void>;
   clarification: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     question: string;
   } | null;
   analysisReview: {
     eventId: string | null;
+    requestKey: string;
+    approvalId: string;
     agentName: string;
     content: string;
+    options: Array<{
+      id: string;
+      label: string;
+      recommended: boolean;
+    }>;
+    allowFreeText: boolean;
   } | null;
+  isSubmittingAnalysisReview: boolean;
+  analysisReviewError: string | null;
+  onAnalysisReviewDecision: (
+    selection: { selectedOptionId?: string; freeText?: string },
+  ) => Promise<void>;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
   onClarificationSend: (answer: string) => Promise<void>;
   approval: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     reason: string;
   } | null;
@@ -48,7 +65,7 @@ interface PlaygroundOverlayProps {
     id: string;
     label: string;
     kind: PlaygroundNodeKind;
-    status: 'idle' | 'running' | 'waiting' | 'success' | 'error';
+    status: 'selecting' | 'idle' | 'running' | 'waiting' | 'success' | 'error';
   } | null;
   nodeSummaryData: NodeSummary | null;
   nodeSummaryRunId: string | null;
@@ -80,6 +97,9 @@ export function PlaygroundOverlay({
   onPromptSend,
   clarification,
   analysisReview,
+  isSubmittingAnalysisReview,
+  analysisReviewError,
+  onAnalysisReviewDecision,
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
@@ -112,6 +132,12 @@ export function PlaygroundOverlay({
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
   const isSessionView = view === 'sessions';
 
+  useEffect(() => {
+    if (isReportWorkspaceOpen && preview) {
+      onClosePreview();
+    }
+  }, [isReportWorkspaceOpen, onClosePreview, preview]);
+
   return (
     // 캔버스 전체를 덮되, 클릭은 통과시키고(overlay: pointer-events none)
     // 실제 UI 요소(dock)에서만 클릭을 받는다(pointer-events auto)
@@ -138,7 +164,7 @@ export function PlaygroundOverlay({
         />
       ) : null}
 
-      {!isSessionView && preview ? (
+      {!isSessionView && !isReportWorkspaceOpen && preview ? (
         <TablePreviewPanel
           sessionId={preview.sessionId}
           table={preview.table}
@@ -198,6 +224,9 @@ export function PlaygroundOverlay({
           onSend={onPromptSend}
           clarification={clarification}
           analysisReview={analysisReview}
+          isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+          analysisReviewError={analysisReviewError}
+          onAnalysisReviewDecision={onAnalysisReviewDecision}
           isSubmittingClarification={isSubmittingClarification}
           clarificationError={clarificationError}
           onClarificationSend={onClarificationSend}

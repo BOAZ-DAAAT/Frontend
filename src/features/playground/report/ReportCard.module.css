@@ -11,6 +11,8 @@
   background: rgb(255 255 255 / 20%);
   color: var(--color-brand-primary);
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
 }
 
 .thumbnail {

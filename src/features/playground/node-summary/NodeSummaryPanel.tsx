@@ -32,7 +32,7 @@ type NodeSummaryPanelProps = {
     id: string;
     label: string;
     kind: PlaygroundNodeKind;
-    status: 'idle' | 'running' | 'waiting' | 'success' | 'error';
+    status: 'selecting' | 'idle' | 'running' | 'waiting' | 'success' | 'error';
   };
   summary: NodeSummary | null;
   runId: string | null;
@@ -43,6 +43,7 @@ type NodeSummaryPanelProps = {
 };
 
 const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
+  supervisor: ScanSearch,
   datasource: Database,
   'sql-agent': SquareTerminal,
   'EDA-agent': ChartNoAxesCombined,
@@ -1308,6 +1309,9 @@ export function NodeSummaryPanel({
                 onSend={onBranchPromptSend}
                 clarification={null}
                 analysisReview={null}
+                isSubmittingAnalysisReview={false}
+                analysisReviewError={null}
+                onAnalysisReviewDecision={async () => undefined}
                 isSubmittingClarification={false}
                 clarificationError={null}
                 onClarificationSend={async () => undefined}

@@ -10,7 +10,9 @@ type StoredGraph = {
 };
 
 function sanitizeNodes(nodes: Node<PlaygroundNodeData>[]): Node<PlaygroundNodeData>[] {
-  return nodes.map((node) => ({
+  return nodes.filter(
+    (node) => !node.id.startsWith('datasource') && !node.id.startsWith('selecting:'),
+  ).map((node) => ({
     ...node,
     data: {
       ...node.data,
@@ -31,8 +33,13 @@ export function getStoredPlaygroundGraph(
       return { nodes: fallbackNodes, edges: fallbackEdges };
     }
     return {
-      nodes: parsed.nodes as Node<PlaygroundNodeData>[],
-      edges: parsed.edges as Edge[],
+      nodes: (parsed.nodes as Node<PlaygroundNodeData>[])
+        .filter(
+          (node) => !node.id.startsWith('datasource') && !node.id.startsWith('selecting:'),
+        ),
+      edges: (parsed.edges as Edge[]).filter(
+        (edge) => !edge.source.startsWith('datasource') && !edge.target.startsWith('datasource'),
+      ),
     };
   } catch {
     return { nodes: fallbackNodes, edges: fallbackEdges };

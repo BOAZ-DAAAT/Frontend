@@ -42,8 +42,8 @@
   width: 100%;
   height: 100%;
   max-height: 100%;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
 }
 
 .documentLayout {

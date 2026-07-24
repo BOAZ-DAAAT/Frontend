@@ -192,8 +192,8 @@ const FRAGMENT_SHADER = `
     float sphereMask = 1.0 - smoothstep(0.265, 0.294, distanceFromCenter);
     float alpha = materialAlpha * sphereMask * 0.94;
 
-    vec3 violetColor = mix(vec3(0.22, 0.53, 0.88), vec3(0.42, 0.18, 0.90), uActive);
-    vec3 magentaColor = mix(vec3(0.12, 0.40, 0.78), vec3(0.95, 0.07, 0.84), uActive);
+    vec3 violetColor = mix(vec3(0.22, 0.53, 0.88), vec3(0.184, 0.988, 0.831), uActive);
+    vec3 magentaColor = mix(vec3(0.12, 0.40, 0.78), vec3(0.145, 0.824, 0.737), uActive);
     vec3 color = (
       density0 * vec3(0.67, 0.98, 0.97)
       + density1 * vec3(0.09, 0.86, 0.94)

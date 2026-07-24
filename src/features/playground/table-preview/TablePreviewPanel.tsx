@@ -58,11 +58,10 @@ type ScrollbarMetrics = {
   thumbWidth: number;
 };
 
-type TableTransitionPhase = 'entering' | 'exiting' | 'idle' | 'initial';
+type TableTransitionPhase = 'entering' | 'exiting' | 'idle';
 
 const TABLE_EXIT_DURATION = 180;
 const TABLE_ENTER_DURATION = 280;
-const INITIAL_REVEAL_DURATION = 520;
 const PANEL_CLOSE_DURATION = 420;
 
 function formatCellValue(value: unknown) {
@@ -83,8 +82,9 @@ function getColumnWidth(column: string, rows: TableRow[]) {
 
 export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
   const [displayedTable, setDisplayedTable] = useState(table);
+  const [displayedPages, setDisplayedPages] = useState<SessionTablePreviewResponse[]>([]);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [transitionPhase, setTransitionPhase] = useState<TableTransitionPhase>('initial');
+  const [transitionPhase, setTransitionPhase] = useState<TableTransitionPhase>('idle');
   const [isClosing, setIsClosing] = useState(false);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
   const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
@@ -121,16 +121,12 @@ export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
     getNextPageParam: (lastPage: SessionTablePreviewResponse) => (
       lastPage.page_info.has_more ? lastPage.page_info.next_cursor ?? undefined : undefined
     ),
-    placeholderData: (previousData, previousQuery) => {
-      const previousKey = previousQuery?.queryKey;
-      const isSameTable = previousKey?.[1] === sessionId && previousKey?.[2] === table;
-      return isSameTable ? previousData : undefined;
-    },
+    placeholderData: (previousData) => previousData,
     staleTime: 5 * 60_000,
     gcTime: 60_000,
   });
 
-  const pages = previewQuery.data?.pages ?? [];
+  const pages = displayedPages;
   const columns = pages[0]?.columns ?? [];
   const rows = useMemo(() => pages.flatMap((page) => page.rows), [pages]);
   const firstPageRows = pages[0]?.rows ?? [];
@@ -184,7 +180,17 @@ export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
     const requestedPreview = { sessionId, table };
     const isDisplayedPreview =
       displayedPreviewRef.current.sessionId === sessionId && displayedPreviewRef.current.table === table;
-    if (isDisplayedPreview) return;
+    const isDataReady = !previewQuery.isPending && !previewQuery.isPlaceholderData;
+    if (!isDataReady) {
+      if (!isDisplayedPreview) setTransitionPhase('idle');
+      return;
+    }
+
+    const requestedPages = previewQuery.data?.pages ?? [];
+    if (isDisplayedPreview) {
+      setDisplayedPages(requestedPages);
+      return;
+    }
 
     sortingScopeRef.current = sortingScope;
     setSorting([]);
@@ -193,6 +199,7 @@ export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
     const exitTimer = window.setTimeout(() => {
       displayedPreviewRef.current = requestedPreview;
       setDisplayedTable(table);
+      setDisplayedPages(requestedPages);
       tableViewportRef.current?.scrollTo({ top: 0, left: 0 });
       setTransitionPhase('entering');
     }, TABLE_EXIT_DURATION);
@@ -202,14 +209,14 @@ export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
       window.clearTimeout(exitTimer);
       window.clearTimeout(enterTimer);
     };
-  }, [sessionId, sortingScope, table]);
-
-  useEffect(() => {
-    if (transitionPhase !== 'initial') return;
-
-    const timer = window.setTimeout(() => setTransitionPhase('idle'), INITIAL_REVEAL_DURATION);
-    return () => window.clearTimeout(timer);
-  }, [transitionPhase]);
+  }, [
+    previewQuery.isPending,
+    previewQuery.isPlaceholderData,
+    previewQuery.data,
+    sessionId,
+    sortingScope,
+    table,
+  ]);
 
   useEffect(() => {
     lastScrollTopRef.current = 0;
@@ -485,18 +492,12 @@ export function TablePreviewPanel({ sessionId, table, onClose }: Props) {
         </div>
 
         <div
-          className={`${styles.tableSurface} ${
-            isClosing
-              ? styles.tableSurfaceClosing
-              : transitionPhase === 'initial'
-                ? styles.tableSurfaceInitial
-                : ''
-          }`}
+          className={`${styles.tableSurface} ${isClosing ? styles.tableSurfaceClosing : ''}`}
         >
           {previewQuery.isPlaceholderData ? (
             <div className={styles.sortingOverlay} role="status" aria-live="polite">
               <LoaderCircle aria-hidden="true" />
-              <span>전체 행 정렬 중...</span>
+              <span>{displayedTable === table ? '전체 행 정렬 중...' : '새 테이블 불러오는 중...'}</span>
             </div>
           ) : null}
           {initialError ? (

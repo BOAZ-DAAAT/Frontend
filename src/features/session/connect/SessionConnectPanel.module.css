@@ -8,6 +8,8 @@
   border-radius: 1.5rem;
   background: rgb(245 246 248 / 30%);
   color: var(--color-brand-primary);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
 }
 
 .header {

@@ -21,8 +21,8 @@
     inset 0 1px 0 rgb(255 255 255 / 84%),
     0 10px 30px rgb(75 88 118 / 12%);
   color: color-mix(in srgb, var(--color-brand-primary) 76%, transparent);
-  backdrop-filter: blur(14px) saturate(142%);
-  -webkit-backdrop-filter: blur(14px) saturate(142%);
+  backdrop-filter: var(--effect-surface-blur) saturate(142%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(142%);
   font: inherit;
   text-align: left;
   pointer-events: auto;
@@ -74,8 +74,8 @@
     inset 0 1px 0 rgb(255 255 255 / 92%),
     0 18px 44px rgb(55 65 92 / 22%);
   color: var(--color-brand-primary);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: var(--effect-surface-blur) saturate(145%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(145%);
   pointer-events: auto;
 }
 
@@ -116,8 +116,8 @@
     inset 0 -20px 42px rgb(255 255 255 / 20%),
     0 18px 54px rgb(75 88 118 / 16%),
     0 2px 10px rgb(255 255 255 / 42%);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: var(--effect-surface-blur) saturate(145%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(145%);
   isolation: isolate;
   transition:
     background 280ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -138,8 +138,7 @@
   pointer-events: none;
 }
 
-.nodeSelected,
-.nodeFlowActive {
+.nodeActive {
   border-color: rgb(255 255 255 / 92%);
   background:
     linear-gradient(145deg, rgb(255 255 255 / 76%) 0%, rgb(255 255 255 / 28%) 52%, rgb(255 255 255 / 48%) 100%),
@@ -151,78 +150,58 @@
     0 0 18px 4px rgb(255 255 255 / 58%),
     0 0 48px 12px rgb(255 255 255 / 28%),
     0 18px 52px rgb(91 103 136 / 10%);
+  animation: nodeActivate 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.nodeFlowActive {
-  border-color: rgb(255 255 255 / 100%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 100%),
-    inset 0 0 0 1px rgb(255 255 255 / 86%),
-    inset 0 0 18px rgb(255 255 255 / 78%),
-    inset 0 0 42px rgb(255 255 255 / 48%),
-    0 0 22px 6px rgb(255 255 255 / 72%),
-    0 0 72px 18px rgb(255 255 255 / 38%),
-    0 22px 64px rgb(91 103 136 / 16%);
-}
-
-.nodeFlowActive::before {
+.nodeActive::before {
   opacity: 0.92;
 }
 
-.nodeSourceConnected::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  z-index: 2;
-  padding: 1px;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle 48px at 100% 50%,
-    rgb(255 255 255 / 92%) 0%,
-    rgb(255 255 255 / 48%) 42%,
-    transparent 76%
-  );
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+.nodeSelecting {
+  border-color: rgb(255 255 255 / 58%);
+  background:
+    linear-gradient(
+      145deg,
+      rgb(255 255 255 / 42%) 0%,
+      rgb(255 255 255 / 13%) 52%,
+      rgb(255 255 255 / 24%) 100%
+    ),
+    rgb(255 255 255 / 16%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 76%),
+    inset 0 0 34px rgb(255 255 255 / 18%),
+    0 0 34px rgb(255 255 255 / 24%),
+    0 18px 54px rgb(75 88 118 / 10%);
+  animation: nodeSelectingBreath 2.6s ease-in-out infinite;
 }
 
-.borderFlow {
-  position: absolute;
-  inset: -1px;
-  z-index: 2;
-  width: calc(100% + 2px);
-  height: calc(100% + 2px);
-  overflow: visible;
-  pointer-events: none;
+.nodeSelecting::before {
+  opacity: 0.46;
 }
 
-.borderFlowPath {
-  fill: none;
-  stroke: rgb(255 255 255 / 100%);
-  stroke-width: 1.8px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter:
-    drop-shadow(0 0 4px rgb(255 255 255 / 90%))
-    drop-shadow(0 0 10px rgb(255 255 255 / 42%));
-  vector-effect: non-scaling-stroke;
-  opacity: 1;
+@keyframes nodeActivate {
+  from {
+    filter: brightness(0.96);
+    transform: scale(0.985);
+  }
+
+  to {
+    filter: brightness(1);
+    transform: scale(1);
+  }
 }
 
-.borderFlowTop {
-  stroke: rgb(255 255 255 / 100%);
-}
+@keyframes nodeSelectingBreath {
+  0%,
+  100% {
+    filter: brightness(0.98);
+    transform: scale(0.992);
+  }
 
-.borderFlowBottom {
-  stroke: rgb(255 255 255 / 100%);
-  stroke-width: 2px;
-  filter:
-    drop-shadow(0 0 4px rgb(255 255 255 / 90%))
-    drop-shadow(0 0 10px rgb(255 255 255 / 42%));
+  50% {
+    filter: brightness(1.04);
+    transform: scale(1);
+  }
 }
 
 .header {
@@ -246,9 +225,9 @@
   overflow: hidden;
   border: 0;
   border-radius: 8px;
-  background: rgb(4 17 42 / 90%);
+  background: transparent;
   box-shadow: none;
-  color: rgb(255 255 255 / 90%);
+  color: rgb(10 9 9 / 92%);
   transform: translateZ(0);
   transition:
     box-shadow 220ms ease,
@@ -256,41 +235,48 @@
     transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+.iconBlob {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  animation: iconBlobSpin 3.4s linear infinite;
+  pointer-events: none;
+}
+
+.iconBlob > canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4.35rem;
+  max-width: none;
+  height: auto;
+  filter: blur(2.8px) saturate(1.04);
+  transform: translate(-50%, -50%);
+}
+
 .icon {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 0.975rem;
   height: 0.975rem;
-  stroke-width: 1.65;
-  filter: drop-shadow(0 0 2px rgb(255 255 255 / 34%));
+  color: rgb(18 34 62 / 98%);
+  stroke-width: 1.85;
+  filter: none;
+  animation: iconReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.iconBoxSuccess {
-  filter: saturate(1.06) brightness(1.07);
+.iconBoxWorking {
+  border-radius: 999px;
 }
 
-.iconBoxWaiting {
-  animation: waitingIconGlow 1.8s ease-in-out infinite;
-}
-
-.iconBoxError {
-  filter: saturate(0.92) brightness(0.94);
-}
-
-.nodeSelected .iconBox {
-  filter: saturate(1.1) brightness(1.1);
-  transform: scale(1.035);
-}
-
-@keyframes waitingIconGlow {
-  0%,
-  100% {
-    filter: saturate(0.94) brightness(0.94);
-  }
-
-  50% {
-    filter: saturate(1.08) brightness(1.1);
-  }
+.iconBoxSuccess,
+.iconBoxWaiting,
+.iconBoxError,
+.nodeActive .iconBox {
+  filter: none;
+  transform: translateZ(0);
 }
 
 .title {
@@ -333,6 +319,24 @@
   }
 }
 
+@keyframes iconBlobSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes iconReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.62) rotate(-10deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
 .deleteButton {
   display: inline-flex;
   width: 1.5rem;
@@ -372,6 +376,27 @@
   color: color-mix(in srgb, var(--color-brand-primary) 72%, transparent);
 }
 
+.workingDescription {
+  color: transparent;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(25 29 38 / 46%) 0,
+      rgb(25 29 38 / 46%) 12rem,
+      rgb(25 29 38 / 68%) 14rem,
+      rgb(13 17 25 / 94%) 16rem,
+      rgb(25 29 38 / 68%) 18rem,
+      rgb(25 29 38 / 46%) 20rem,
+      rgb(25 29 38 / 46%) 32rem
+    );
+  background-clip: text;
+  background-position: -32rem 50%;
+  background-size: 32rem 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: workingTextFlow 3s linear infinite;
+}
+
 .body {
   position: relative;
   z-index: 1;
@@ -389,8 +414,24 @@
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 70%),
     0 10px 34px rgb(75 88 118 / 9%);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: var(--effect-surface-blur) saturate(130%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(130%);
+}
+
+.nodeWorking .content {
+  border-color: rgb(255 255 255 / 7%);
+  background: rgb(255 255 255 / 3%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+@keyframes workingTextFlow {
+  from {
+    background-position: -32rem 50%;
+  }
+
+  to {
+    background-position: 0 50%;
+  }
 }
 
 .chartBox {
@@ -404,8 +445,8 @@
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 70%),
     0 10px 34px rgb(75 88 118 / 9%);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: var(--effect-surface-blur) saturate(130%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(130%);
 }
 
 .chartPlot {
@@ -450,6 +491,17 @@
 @media (prefers-reduced-motion: reduce) {
   .node {
     transition: none;
+  }
+
+  .nodeActive {
+    animation: none;
+  }
+
+  .nodeSelecting,
+  .iconBlob,
+  .icon,
+  .workingDescription {
+    animation: none;
   }
 
   .runningBlob {

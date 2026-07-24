@@ -1,8 +1,7 @@
 import {
   Handle,
   Position,
-  useEdges,
-  useNodeConnections,
+  useNodes,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
@@ -26,6 +25,7 @@ import styles from './PlaygroundNode.module.css';
 type PlaygroundNodeType = Node<PlaygroundNodeData, 'playground'>;
 
 const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
+  supervisor: ScanSearch,
   datasource: Database,
   'sql-agent': SquareTerminal,
   'EDA-agent': ChartNoAxesCombined,
@@ -36,18 +36,25 @@ const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
 export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>) {
   const [isQueryOpen, setIsQueryOpen] = useState(false);
   const NodeIcon = NODE_ICONS[data.kind];
-  const edges = useEdges();
-  const targetConnections = useNodeConnections({ handleType: 'target' });
-  const sourceConnections = useNodeConnections({ handleType: 'source' });
-  const activeEdgeIds = new Set(
-    edges
-      .filter((edge) => edge.data?.flowState === 'active')
-      .map((edge) => edge.id),
+  const isSelecting = data.status === 'selecting';
+  const isWorking = (
+    isSelecting
+    || data.status === 'running'
+    || data.status === 'waiting'
   );
-  const hasActiveTarget = targetConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
-  const hasActiveSource = sourceConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
-  const isFlowActive = hasActiveTarget || hasActiveSource;
-  const canDeleteRun = Boolean(data.runId && data.onDeleteRun);
+  const flowRunning = useNodes<PlaygroundNodeType>().some(
+    (node) => (
+      node.data.status === 'selecting'
+      || node.data.status === 'running'
+      || node.data.status === 'waiting'
+    ),
+  );
+  const isActive = (
+    data.status === 'running'
+    || data.status === 'waiting'
+    || (selected && !flowRunning)
+  );
+  const canDeleteRun = Boolean(!isSelecting && data.runId && data.onDeleteRun);
 
   return (
     <div className={styles.wrapper}>
@@ -74,10 +81,10 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         </div>
       ) : null}
       <div
-        className={`${styles.node} ${selected ? styles.nodeSelected : ''} ${
-          isFlowActive ? styles.nodeFlowActive : ''
-        } ${
-          hasActiveSource ? styles.nodeSourceConnected : ''
+        className={`${styles.node} ${
+          isSelecting ? styles.nodeSelecting : ''
+        } ${isWorking ? styles.nodeWorking : ''} ${
+          isActive ? styles.nodeActive : ''
         }`}
       >
       <Handle
@@ -87,56 +94,39 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         className={styles.edgeAnchor}
       />
 
-      {isFlowActive ? (
-        <svg
-          className={`${styles.borderFlow} ${
-            hasActiveSource ? styles.borderFlowSource : ''
-          } ${hasActiveTarget ? styles.borderFlowTarget : ''}`}
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            className={`${styles.borderFlowPath} ${styles.borderFlowTop}`}
-            d="M 0 50 L 0 6 Q 0 0 6 0 L 94 0 Q 100 0 100 6 L 100 50"
-            pathLength={100}
-          />
-          <path
-            className={`${styles.borderFlowPath} ${styles.borderFlowBottom}`}
-            d="M 0 50 L 0 94 Q 0 100 6 100 L 94 100 Q 100 100 100 94 L 100 50"
-            pathLength={100}
-          />
-        </svg>
-      ) : null}
-
       <div className={styles.header}>
-        {data.status === 'running' ? (
-          <span className={styles.runningBlob} aria-label="노드 생성 중">
+        <span
+          className={`${styles.iconBox} ${
+            isWorking ? styles.iconBoxWorking : ''
+          } ${
+            data.status === 'success' ? styles.iconBoxSuccess : ''
+          } ${
+            data.status === 'waiting' ? styles.iconBoxWaiting : ''
+          } ${
+            data.status === 'error' ? styles.iconBoxError : ''
+          }`}
+        >
+          <span
+            className={styles.iconBlob}
+            aria-hidden="true"
+          >
             <BlobOrb
               active={false}
               motion={0.48}
               speed={0.42}
-              label="노드 생성 중"
             />
           </span>
+          {!isWorking ? <NodeIcon className={styles.icon} /> : null}
+        </span>
+        {isSelecting ? (
+          <span className={styles.title}>{data.label}</span>
         ) : (
-          <span
-            className={`${styles.iconBox} ${
-              data.status === 'success' ? styles.iconBoxSuccess : ''
-            } ${
-              data.status === 'waiting' ? styles.iconBoxWaiting : ''
-            } ${
-              data.status === 'error' ? styles.iconBoxError : ''
-            }`}
-          >
-            <NodeIcon className={styles.icon} />
-          </span>
+          <InlineNodeEditor
+            value={data.label}
+            label="노드 제목"
+            className={styles.title}
+          />
         )}
-        <InlineNodeEditor
-          value={data.label}
-          label="노드 제목"
-          className={styles.title}
-        />
         {canDeleteRun ? (
           <button
             type="button"
@@ -154,15 +144,21 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
 
       <div className={styles.body}>
         <div className={styles.content}>
-          <InlineNodeEditor
-            multiline
-            value={data.description}
-            label="노드 작업 요약"
-            className={styles.description}
-          />
+          {isWorking ? (
+            <p className={`${styles.description} ${styles.workingDescription}`}>
+              {data.description}
+            </p>
+          ) : (
+            <InlineNodeEditor
+              multiline
+              value={data.description}
+              label="노드 작업 요약"
+              className={styles.description}
+            />
+          )}
         </div>
 
-        {data.chart ? (
+        {!isWorking && data.chart ? (
           <div className={styles.chartBox} role="img" aria-label={data.chart.label}>
             <div className={styles.chartPlot}>
               {data.chart.values.map((value, index) => (

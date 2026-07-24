@@ -19,6 +19,7 @@ import {
   deleteAgentRun,
   listAgentSessionEvents,
   resumeAgentRun,
+  resumeAgentRunAnalysisReview,
   resumeAgentRunApproval,
   type BranchStage,
 } from '@/features/agent-runs/api';
@@ -60,6 +61,8 @@ const ALIGNMENT_SNAP_THRESHOLD = 56;
 const ALIGNMENT_SNAP_DURATION = 260;
 const FALLBACK_NODE_WIDTH = 320;
 const FOLLOW_RESPONSE = 0.3;
+const NODE_CREATION_X_GAP = 460;
+const NODE_CREATION_BRANCH_Y_GAP = 240;
 
 const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' | 'description'>> = {
   'sql-agent': {
@@ -96,20 +99,30 @@ type PlaygroundCanvasProps = {
 
 type Clarification = {
   eventId: string | null;
+  requestKey: string;
   agentName: string;
   question: string;
 };
 
 type Approval = {
   eventId: string | null;
+  requestKey: string;
   agentName: string;
   reason: string;
 };
 
 type AnalysisReview = {
   eventId: string | null;
+  requestKey: string;
+  approvalId: string;
   agentName: string;
   content: string;
+  options: Array<{
+    id: string;
+    label: string;
+    recommended: boolean;
+  }>;
+  allowFreeText: boolean;
 };
 
 type SelectedNodeSummary = {
@@ -118,6 +131,7 @@ type SelectedNodeSummary = {
   label: string;
   kind: PlaygroundNodeData['kind'];
   status: PlaygroundNodeData['status'];
+  parentNodeId: string | null;
 };
 
 type NodeSummaryRequest = {
@@ -157,9 +171,40 @@ function getDescendantNodeIds(edges: Edge[], rootId: string): Set<string> {
   return new Set(getDescendantDepths(edges, rootId).keys());
 }
 
+function getAncestorEdgeIds(edges: Edge[], targetIds: string[]): Set<string> {
+  const ancestorEdgeIds = new Set<string>();
+  const pending = [...targetIds];
+  const visitedNodes = new Set(targetIds);
+
+  while (pending.length) {
+    const targetId = pending.pop();
+    if (!targetId) continue;
+
+    for (const edge of edges) {
+      if (edge.target !== targetId || ancestorEdgeIds.has(edge.id)) continue;
+      ancestorEdgeIds.add(edge.id);
+      if (visitedNodes.has(edge.source)) continue;
+      visitedNodes.add(edge.source);
+      pending.push(edge.source);
+    }
+  }
+
+  return ancestorEdgeIds;
+}
+
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = metadata?.[key];
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function metadataObject(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): Record<string, unknown> | null {
+  const value = metadata?.[key];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function interruptType(metadata: Record<string, unknown> | null | undefined) {
@@ -168,22 +213,27 @@ function interruptType(metadata: Record<string, unknown> | null | undefined) {
 
 function getClarification(run: RunSummary | null, events: RunEvent[]): Clarification | null {
   let waitingEvent: RunEvent | null = null;
+  let wasResumed = false;
 
   for (const event of events) {
+    if (!run || event.run_id !== run.run_id) continue;
     if (
       event.event_type === 'human_input.required'
       && interruptType(event.metadata) === 'clarification'
     ) {
       waitingEvent = event;
+      wasResumed = false;
     }
     if (
       event.event_type === 'human_input.resumed'
       && interruptType(event.metadata) === 'clarification'
     ) {
       waitingEvent = null;
+      wasResumed = true;
     }
   }
 
+  if (wasResumed) return null;
   if (!waitingEvent && (
     run?.status !== 'waiting_input'
     || interruptType(run.metadata) !== 'clarification'
@@ -201,46 +251,86 @@ function getClarification(run: RunSummary | null, events: RunEvent[]): Clarifica
     ? 'Supervisor Agent'
     : rawAgentName;
 
-  return { eventId: waitingEvent?.event_id ?? null, agentName, question };
+  const eventId = waitingEvent?.event_id ?? null;
+  return {
+    eventId,
+    requestKey: eventId ?? `${run?.run_id ?? 'run'}:clarification:${run?.updated_at ?? question}`,
+    agentName,
+    question,
+  };
 }
 
 function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | null {
   if (run?.status !== 'waiting_approval') return null;
 
   let waitingEvent: RunEvent | null = null;
+  let wasResumed = false;
   for (const event of events) {
-    if (event.event_type === 'agent.waiting') waitingEvent = event;
-    if (event.event_type === 'human_input.resumed') waitingEvent = null;
+    if (event.run_id !== run.run_id) continue;
+    if (
+      event.event_type === 'human_input.required'
+      && interruptType(event.metadata) === 'approval'
+    ) {
+      waitingEvent = event;
+      wasResumed = false;
+    } else if (event.event_type === 'agent.waiting' && waitingEvent === null) {
+      // 이전 백엔드 이벤트도 복원할 수 있도록 유지한다.
+      waitingEvent = event;
+      wasResumed = false;
+    }
+    if (
+      event.event_type === 'human_input.resumed'
+      && interruptType(event.metadata) === 'approval'
+    ) {
+      waitingEvent = null;
+      wasResumed = true;
+    }
   }
 
+  if (wasResumed) return null;
   const reason = waitingEvent?.message
     ?? metadataString(run.metadata, 'reason')
     ?? '결과를 승인해 주세요.';
   const rawAgentName = waitingEvent?.node_name ?? 'analysis_agent';
 
-  return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
+  const eventId = waitingEvent?.event_id ?? null;
+  return {
+    eventId,
+    requestKey: eventId ?? `${run.run_id}:approval:${run.updated_at ?? reason}`,
+    agentName: rawAgentName,
+    reason,
+  };
 }
 
 function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): AnalysisReview | null {
   let reviewEvent: RunEvent | null = null;
+  let wasResumed = false;
 
   for (const event of events) {
+    if (!run || event.run_id !== run.run_id) continue;
     if (interruptType(event.metadata) !== 'analysis_review') continue;
 
     if (['approval.required', 'analysis_review.required', 'human_input.required'].includes(event.event_type)) {
       reviewEvent = event;
+      wasResumed = false;
     }
     if (['approval.resolved', 'analysis_review.resolved', 'human_input.resumed'].includes(event.event_type)) {
       reviewEvent = null;
+      wasResumed = true;
     }
   }
 
+  if (wasResumed) return null;
   if (!reviewEvent && (
     run?.status !== 'waiting_approval'
     || interruptType(run.metadata) !== 'analysis_review'
   )) return null;
 
-  const content = metadataString(reviewEvent?.metadata, 'answer')
+  const reviewRequest = metadataObject(reviewEvent?.metadata, 'review_request')
+    ?? metadataObject(run?.metadata, 'review_request');
+  const content = metadataString(reviewRequest, 'question')
+    ?? metadataString(reviewRequest, 'proposal')
+    ?? metadataString(reviewEvent?.metadata, 'answer')
     ?? metadataString(reviewEvent?.metadata, 'content')
     ?? metadataString(reviewEvent?.metadata, 'review')
     ?? reviewEvent?.message
@@ -251,7 +341,37 @@ function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): Analysis
     ?? metadataString(run?.metadata, 'node')
     ?? 'Analysis Agent';
 
-  return { eventId: reviewEvent?.event_id ?? null, agentName, content };
+  const approvalId = metadataString(reviewEvent?.metadata, 'approval_id')
+    ?? reviewEvent?.approval_id
+    ?? metadataString(run?.metadata, 'approval_id');
+  if (!approvalId) return null;
+
+  const rawOptions = reviewRequest?.options;
+  const options = Array.isArray(rawOptions)
+    ? rawOptions.flatMap((option) => {
+        if (!option || typeof option !== 'object' || Array.isArray(option)) return [];
+        const record = option as Record<string, unknown>;
+        const id = typeof record.id === 'string' ? record.id.trim() : '';
+        const label = typeof record.label === 'string' ? record.label.trim() : '';
+        if (!id || !label) return [];
+        return [{
+          id,
+          label,
+          recommended: record.recommended === true,
+        }];
+      })
+    : [];
+  const eventId = reviewEvent?.event_id ?? null;
+
+  return {
+    eventId,
+    requestKey: eventId ?? `${run?.run_id ?? 'run'}:analysis_review:${approvalId}`,
+    approvalId,
+    agentName,
+    content,
+    options,
+    allowFreeText: reviewRequest?.allow_free_text !== false,
+  };
 }
 
 function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
@@ -310,6 +430,11 @@ export function PlaygroundCanvas({
   const [clarificationError, setClarificationError] = useState<string | null>(null);
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [isSubmittingAnalysisReview, setIsSubmittingAnalysisReview] = useState(false);
+  const [analysisReviewError, setAnalysisReviewError] = useState<string | null>(null);
+  const [dismissedClarificationKey, setDismissedClarificationKey] = useState<string | null>(null);
+  const [dismissedApprovalKey, setDismissedApprovalKey] = useState<string | null>(null);
+  const [dismissedAnalysisReviewKey, setDismissedAnalysisReviewKey] = useState<string | null>(null);
   const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
   const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
 
@@ -392,10 +517,25 @@ export function PlaygroundCanvas({
     ),
   );
   const isGenerating = isStartingRun || isRunActive;
-  const clarification = useMemo(() => getClarification(run, visibleEvents), [visibleEvents, run]);
-  const approval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
-  const analysisReview = useMemo(() => getAnalysisReview(run, visibleEvents), [visibleEvents, run]);
-  const hasDeletableNodes = nodes.some((node) => node.id !== 'datasource');
+  const detectedClarification = useMemo(
+    () => getClarification(run, visibleEvents),
+    [visibleEvents, run],
+  );
+  const detectedApproval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
+  const detectedAnalysisReview = useMemo(
+    () => getAnalysisReview(run, visibleEvents),
+    [visibleEvents, run],
+  );
+  const clarification = detectedClarification?.requestKey === dismissedClarificationKey
+    ? null
+    : detectedClarification;
+  const approval = detectedApproval?.requestKey === dismissedApprovalKey
+    ? null
+    : detectedApproval;
+  const analysisReview = detectedAnalysisReview?.requestKey === dismissedAnalysisReviewKey
+    ? null
+    : detectedAnalysisReview;
+  const hasDeletableNodes = nodes.length > 0;
 
   const startDescendantFollow = () => {
     if (followAnimationFrame.current !== null) return;
@@ -585,29 +725,49 @@ export function PlaygroundCanvas({
   useEffect(() => {
     setIsSubmittingClarification(false);
     setClarificationError(null);
-  }, [clarification?.eventId]);
+  }, [clarification?.requestKey]);
 
   useEffect(() => {
     setIsSubmittingApproval(false);
     setApprovalError(null);
-  }, [approval?.eventId]);
+  }, [approval?.requestKey]);
 
   useEffect(() => {
-    if (activeRunId && !run && !runStreamError && visibleEvents.length === 0) return;
+    setIsSubmittingAnalysisReview(false);
+    setAnalysisReviewError(null);
+  }, [analysisReview?.requestKey]);
 
-    const nextGraph = deriveNodeGraphFromEvents(visibleEvents, playgroundNodes, playgroundEdges);
+  useEffect(() => {
+    const nextGraph = deriveNodeGraphFromEvents(
+      visibleEvents,
+      playgroundNodes,
+      playgroundEdges,
+      activeRunId,
+    );
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
       const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
+      const positionedNodesById = new Map(currentNodesById);
 
       const eventNodes = nextGraph.nodes.map((node) => {
         const currentNode = currentNodesById.get(node.id);
         const data = { ...node.data, onDeleteRun: handleDeleteRunStable };
-        return {
+        const parentNode = data.parentNodeId
+          ? positionedNodesById.get(data.parentNodeId)
+          : null;
+        const position = currentNode?.position ?? {
+          ...node.position,
+          x: parentNode
+            ? Math.max(node.position.x, parentNode.position.x + NODE_CREATION_X_GAP)
+            : node.position.x,
+        };
+        const positionedNode = {
           ...node,
-          position: currentNode?.position ?? node.position,
+          position,
           data,
         };
+        positionedNodesById.set(node.id, positionedNode);
+        return positionedNode;
       });
 
       return [...eventNodes, ...manualNodes];
@@ -652,6 +812,46 @@ export function PlaygroundCanvas({
     }
   }, [activeRunId, handleDeleteRunStable, visibleEvents, setEdges, setNodes]);
 
+  const nodeActivationKey = nodes
+    .map((node) => `${node.id}:${node.data.status}:${node.selected ? 'selected' : 'idle'}`)
+    .join('|');
+  const edgeTopologyKey = edges
+    .map((edge) => `${edge.id}:${edge.source}:${edge.target}`)
+    .join('|');
+
+  useEffect(() => {
+    const runningNodeIds = nodes
+      .filter((node) => (
+        node.data.status === 'selecting'
+        || node.data.status === 'running'
+        || node.data.status === 'waiting'
+      ))
+      .map((node) => node.id);
+    const targetNodeIds = runningNodeIds.length > 0
+      ? runningNodeIds
+      : nodes.filter((node) => node.selected).map((node) => node.id);
+
+    setEdges((currentEdges) => {
+      const activeEdgeIds = getAncestorEdgeIds(currentEdges, targetNodeIds);
+      let changed = false;
+      const nextEdges = currentEdges.map((edge) => {
+        const shouldBeActive = activeEdgeIds.has(edge.id);
+        const isActive = edge.data?.flowState === 'active';
+        if (shouldBeActive === isActive) return edge;
+        changed = true;
+        return {
+          ...edge,
+          zIndex: shouldBeActive ? 10 : 0,
+          data: {
+            ...edge.data,
+            flowState: shouldBeActive ? 'active' : 'idle',
+          },
+        };
+      });
+      return changed ? nextEdges : currentEdges;
+    });
+  }, [edgeTopologyKey, nodeActivationKey, nodes, setEdges]);
+
   useEffect(() => {
     setSelectedNodeSummary((selected) => {
       if (!selected) return null;
@@ -663,6 +863,7 @@ export function PlaygroundCanvas({
         label: currentNode.data.label,
         kind: currentNode.data.kind,
         status: currentNode.data.status,
+        parentNodeId: currentNode.data.parentNodeId ?? null,
       };
     });
   }, [nodes]);
@@ -757,6 +958,8 @@ export function PlaygroundCanvas({
     setClarificationError(null);
     try {
       await resumeAgentRun(activeRunId, answer);
+      setDismissedClarificationKey(clarification.requestKey);
+      setIsSubmittingClarification(false);
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -774,6 +977,8 @@ export function PlaygroundCanvas({
     setApprovalError(null);
     try {
       await resumeAgentRunApproval(activeRunId, approved);
+      setDismissedApprovalKey(approval.requestKey);
+      setIsSubmittingApproval(false);
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -784,30 +989,64 @@ export function PlaygroundCanvas({
     }
   };
 
+  const handleAnalysisReviewDecision = async (
+    selection: { selectedOptionId?: string; freeText?: string },
+  ) => {
+    if (!activeRunId || !analysisReview || isSubmittingAnalysisReview) return;
+
+    setIsSubmittingAnalysisReview(true);
+    setAnalysisReviewError(null);
+    try {
+      await resumeAgentRunAnalysisReview(
+        activeRunId,
+        analysisReview.approvalId,
+        selection,
+      );
+      setDismissedAnalysisReviewKey(analysisReview.requestKey);
+      setIsSubmittingAnalysisReview(false);
+    } catch (error) {
+      const message = error instanceof BackendApiError
+        ? error.message
+        : '분석 검토 응답을 전송하지 못했습니다. 다시 시도해 주세요.';
+      setAnalysisReviewError(message);
+      setIsSubmittingAnalysisReview(false);
+      throw error;
+    }
+  };
+
   const handleCreateNode = (kind: CreatableNodeKind) => {
     const selectedNode = nodes.find((node) => node.selected);
     const nodeId = `manual-${crypto.randomUUID()}`;
+    const existingChildCount = selectedNode
+      ? edges.filter((edge) => edge.source === selectedNode.id).length
+      : 0;
 
     setNodes((currentNodes) => {
       const manualNodeCount = currentNodes.filter((node) => node.id.startsWith('manual-')).length;
       const column = manualNodeCount % 3;
       const row = Math.floor(manualNodeCount / 3);
+      const nextPosition = selectedNode
+        ? {
+            x: selectedNode.position.x + NODE_CREATION_X_GAP,
+            y: selectedNode.position.y
+              + (existingChildCount > 0 ? existingChildCount * NODE_CREATION_BRANCH_Y_GAP : 0),
+          }
+        : { x: 280 + column * 384, y: 320 + row * 200 };
 
       return [
-        ...currentNodes,
+        ...currentNodes.map((node) => (
+          node.selected ? { ...node, selected: false } : node
+        )),
         {
           id: nodeId,
           type: 'playground',
-          position: selectedNode
-            ? {
-                x: selectedNode.position.x + 460,
-                y: selectedNode.position.y,
-              }
-            : { x: 280 + column * 384, y: 320 + row * 200 },
+          position: nextPosition,
+          selected: true,
           data: {
             ...NODE_DEFAULTS[kind],
             kind,
             status: 'idle',
+            parentNodeId: selectedNode?.id ?? null,
           },
         },
       ];
@@ -827,23 +1066,9 @@ export function PlaygroundCanvas({
     }
   };
 
-  const handleEdgeClick = (_event: ReactMouseEvent, clickedEdge: Edge) => {
-    setEdges((currentEdges) => currentEdges.map((edge) => {
-      if (edge.id !== clickedEdge.id) return edge;
-
-      const isActive = edge.data?.flowState === 'active';
-      return {
-        ...edge,
-        zIndex: isActive ? 0 : 10,
-        data: {
-          ...edge.data,
-          flowState: isActive ? 'idle' : 'active',
-        },
-      };
-    }));
-  };
-
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
+    if (node.data.status === 'selecting') return;
+
     if (mode === 'report') {
       setSelectedNodeSummary(null);
       if (node.data.kind !== 'insight-agent' || node.data.status !== 'success' || !node.data.runId) {
@@ -881,6 +1106,7 @@ export function PlaygroundCanvas({
       label: node.data.label,
       kind: node.data.kind,
       status: node.data.status,
+      parentNodeId: node.data.parentNodeId ?? null,
     });
   };
 
@@ -894,7 +1120,12 @@ export function PlaygroundCanvas({
 
     setIsStartingRun(true);
     try {
-      const branchRun = await branchAgentRun(branchSourceRunId, startStage, prompt, selectedNodeSummary.id);
+      const branchRun = await branchAgentRun(
+        branchSourceRunId,
+        startStage,
+        prompt,
+        selectedNodeSummary.parentNodeId,
+      );
       setActiveRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
       setSelectedNodeSummary(null);
@@ -960,7 +1191,6 @@ export function PlaygroundCanvas({
           onNodeDragStop={handleNodeDragStop}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
-          onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
           selectNodesOnDrag={false}
           fitView
@@ -977,6 +1207,9 @@ export function PlaygroundCanvas({
         onPromptSend={handlePromptSend}
         clarification={clarification}
         analysisReview={analysisReview}
+        isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+        analysisReviewError={analysisReviewError}
+        onAnalysisReviewDecision={handleAnalysisReviewDecision}
         isSubmittingClarification={isSubmittingClarification}
         clarificationError={clarificationError}
         onClarificationSend={handleClarificationSend}
