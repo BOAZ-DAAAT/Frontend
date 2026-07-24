@@ -1672,6 +1672,7 @@ export function PlaygroundCanvas({
           }}
           selectNodesOnDrag={false}
           fitView
+          fitViewOptions={{ maxZoom: 1 }}
         >
         </ReactFlow>
       ) : null}
