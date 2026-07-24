@@ -87,6 +87,11 @@ export function PlaygroundNode({ id, data, selected }: NodeProps<PlaygroundNodeT
       ref={wrapperRef}
       className={styles.wrapper}
       style={{ '--node-enter-delay': `${enterDelay}ms` } as CSSProperties}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget) {
+          updateNodeInternals(id);
+        }
+      }}
     >
       {queryBadges.length ? (
         <div
