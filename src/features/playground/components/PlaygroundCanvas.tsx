@@ -50,7 +50,9 @@ import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import { useMode } from '@/features/playground/toolbar/ModeContext';
 import type { PlaygroundNodeData, PlaygroundNodeQuery } from '@/features/playground/types';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
+import { getSession } from '@/features/session/api';
 import { getCurrentSessionId } from '@/features/session/currentSession';
+import type { Session } from '@/features/session/types';
 import { BackendApiError } from '@/lib/apiClient';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
@@ -71,6 +73,37 @@ const NEW_PROMPT_NODE_Y_GAP = 220;
 const QUERY_BADGE_HEIGHT = 30;
 const QUERY_BADGE_GAP = 6;
 const QUERY_BADGE_OFFSET = 8;
+const TERMINAL_RUN_STATUSES = new Set<RunSummary['status']>([
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
+
+function createDatasourceNode(
+  sessionId: string,
+  session: Session | null,
+  position: { x: number; y: number },
+): Node<PlaygroundNodeData> {
+  return {
+    id: `datasource:${sessionId}`,
+    type: 'playground',
+    position,
+    data: {
+      label: 'Data Source',
+      description: session
+        ? [
+            '원본 데이터 연결이 완료되었습니다.',
+            `Database: ${session.source_database}`,
+          ].join('\n')
+        : '분석에 사용할 원본 데이터 소스가 연결되었습니다.',
+      kind: 'datasource',
+      status: 'success',
+      nodeSequence: 0,
+      parentNodeId: null,
+      agentName: 'datasource',
+    },
+  };
+}
 
 const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' | 'description'>> = {
   'sql-agent': {
@@ -184,15 +217,24 @@ function getNewPromptNodePosition(
   currentNodes: Array<Node<PlaygroundNodeData>>,
   viewportCenter: { x: number; y: number },
 ) {
-  if (!currentNodes.length) {
+  const datasourceNode = currentNodes.find((node) => node.data.kind === 'datasource');
+  const flowNodes = currentNodes.filter((node) => node.data.kind !== 'datasource');
+
+  if (!flowNodes.length) {
+    if (datasourceNode) {
+      return {
+        x: datasourceNode.position.x + NODE_CREATION_X_GAP,
+        y: datasourceNode.position.y,
+      };
+    }
     return {
       x: viewportCenter.x - INITIAL_NODE_WIDTH / 2,
       y: viewportCenter.y - INITIAL_NODE_HEIGHT / 2,
     };
   }
 
-  const flowStartX = Math.min(...currentNodes.map((node) => node.position.x));
-  const flowBottom = Math.max(...currentNodes.map((node) => (
+  const flowStartX = Math.min(...flowNodes.map((node) => node.position.x));
+  const flowBottom = Math.max(...flowNodes.map((node) => (
     node.position.y + (node.measured?.height ?? node.height ?? INITIAL_NODE_HEIGHT)
   )));
 
@@ -499,6 +541,9 @@ export function PlaygroundCanvas({
   const snapAnimationFrame = useRef<number | null>(null);
 
   const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
+  const [locallyStartedRunId, setLocallyStartedRunId] = useState<string | null>(null);
+  const currentSessionId = getCurrentSessionId();
+  const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [isDeletingNodes, setIsDeletingNodes] = useState(false);
   const [deleteNodesError, setDeleteNodesError] = useState<string | null>(null);
   const [isStartingRun, setIsStartingRun] = useState(false);
@@ -513,8 +558,32 @@ export function PlaygroundCanvas({
   const [dismissedClarificationKey, setDismissedClarificationKey] = useState<string | null>(null);
   const [dismissedApprovalKey, setDismissedApprovalKey] = useState<string | null>(null);
   const [dismissedAnalysisReviewKey, setDismissedAnalysisReviewKey] = useState<string | null>(null);
-  const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
+  const {
+    run,
+    events,
+    error: runStreamError,
+    reconnect: reconnectRunStream,
+  } = useAgentRunStream(activeRunId);
   const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
+
+  useEffect(() => {
+    if (!currentSessionId) {
+      setCurrentSession(null);
+      return;
+    }
+
+    let cancelled = false;
+    void getSession(currentSessionId)
+      .then((session) => {
+        if (!cancelled) setCurrentSession(session);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentSession(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSessionId]);
 
   const handleDeleteRunStable = useCallback(async (runId: string, label: string) => {
     const shouldDelete = window.confirm(
@@ -598,13 +667,20 @@ export function PlaygroundCanvas({
   const { collapse, view } = useSidebar();
   const { mode } = useMode();
   const isSessionView = view === 'sessions';
-  const isRunActive = Boolean(
-    activeRunId && (
-      !run
-      || run.run_id !== activeRunId
-      || !['succeeded', 'failed', 'cancelled'].includes(run.status)
+  const isVerifiedActiveRun = Boolean(
+    activeRunId
+    && run?.run_id === activeRunId
+    && !TERMINAL_RUN_STATUSES.has(run.status),
+  );
+  const isLocallyStartedRunActive = Boolean(
+    activeRunId
+    && locallyStartedRunId === activeRunId
+    && !(
+      run?.run_id === activeRunId
+      && TERMINAL_RUN_STATUSES.has(run.status)
     ),
   );
+  const isRunActive = isVerifiedActiveRun || isLocallyStartedRunActive;
   const isGenerating = isStartingRun || isRunActive;
   const detectedClarification = useMemo(
     () => getClarification(run, visibleEvents),
@@ -624,7 +700,7 @@ export function PlaygroundCanvas({
   const analysisReview = detectedAnalysisReview?.requestKey === dismissedAnalysisReviewKey
     ? null
     : detectedAnalysisReview;
-  const hasDeletableNodes = nodes.length > 0;
+  const hasDeletableNodes = nodes.some((node) => node.data.kind !== 'datasource');
 
   const startDescendantFollow = () => {
     if (followAnimationFrame.current !== null) return;
@@ -845,6 +921,14 @@ export function PlaygroundCanvas({
   }, [analysisReview?.requestKey]);
 
   useEffect(() => {
+    const isRestoringStoredRun = Boolean(
+      activeRunId
+      && locallyStartedRunId !== activeRunId
+      && !run
+      && visibleEvents.length === 0,
+    );
+    if (isRestoringStoredRun) return;
+
     const activeRunOriginalQuery = run?.run_id === activeRunId
       && typeof run.metadata?.query === 'string'
       ? run.metadata.query.trim()
@@ -853,8 +937,22 @@ export function PlaygroundCanvas({
       visibleEvents,
       playgroundNodes,
       playgroundEdges,
-      activeRunId,
+      isRunActive ? activeRunId : null,
     );
+    const eventTargetNodeIds = new Set(nextGraph.edges.map((edge) => edge.target));
+    const rootEventNodes = nextGraph.nodes.filter((node) => !eventTargetNodeIds.has(node.id));
+    const datasourceEdges: Edge[] = currentSessionId
+      ? rootEventNodes.map((node) => ({
+          id: `datasource:${currentSessionId}-to-${node.id}`,
+          source: `datasource:${currentSessionId}`,
+          target: node.id,
+          type: 'playground',
+          selectable: false,
+          animated: false,
+          zIndex: 0,
+          data: { flowState: 'idle' },
+        }))
+      : [];
     const shouldAnimateNewEdges = hasReconciledEventGraph.current;
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
@@ -1012,12 +1110,43 @@ export function PlaygroundCanvas({
         };
       });
 
-      return [...eventNodesWithQueryBadges, ...manualNodes];
+      const currentDatasourceNode = currentSessionId
+        ? currentNodesById.get(`datasource:${currentSessionId}`)
+        : null;
+      const firstRootNode = eventNodesWithQueryBadges.find(
+        (node) => !eventTargetNodeIds.has(node.id),
+      );
+      const defaultDatasourcePosition = firstRootNode
+        ? {
+            x: firstRootNode.position.x - NODE_CREATION_X_GAP,
+            y: firstRootNode.position.y,
+          }
+        : { x: 0, y: 120 };
+      const datasourceOverlapsRoot = Boolean(
+        currentDatasourceNode
+        && firstRootNode
+        && boundsOverlap(
+          getNodeCollisionBounds(currentDatasourceNode, currentDatasourceNode.position),
+          getNodeCollisionBounds(firstRootNode, firstRootNode.position),
+        ),
+      );
+      const datasourcePosition = currentDatasourceNode && !datasourceOverlapsRoot
+        ? currentDatasourceNode.position
+        : defaultDatasourcePosition;
+      const datasourceNode = currentSessionId
+        ? createDatasourceNode(currentSessionId, currentSession, datasourcePosition)
+        : null;
+
+      return [
+        ...(datasourceNode ? [datasourceNode] : []),
+        ...eventNodesWithQueryBadges,
+        ...manualNodes,
+      ];
     });
     setEdges((currentEdges) => {
       const currentEdgesById = new Map(currentEdges.map((edge) => [edge.id, edge]));
       const manualEdges = currentEdges.filter((edge) => edge.id.startsWith('manual-edge-'));
-      const eventEdges = nextGraph.edges.map((edge) => {
+      const eventEdges = [...nextGraph.edges, ...datasourceEdges].map((edge) => {
         const currentEdge = currentEdgesById.get(edge.id);
         if (!currentEdge) {
           return {
@@ -1062,7 +1191,18 @@ export function PlaygroundCanvas({
           hydratedSummaryNodes.current.delete(hydrationKey);
         });
     }
-  }, [activeRunId, handleDeleteRunStable, run, visibleEvents, setEdges, setNodes]);
+  }, [
+    activeRunId,
+    currentSession,
+    currentSessionId,
+    handleDeleteRunStable,
+    isRunActive,
+    locallyStartedRunId,
+    run,
+    visibleEvents,
+    setEdges,
+    setNodes,
+  ]);
 
   const nodeActivationKey = nodes
     .map((node) => `${node.id}:${node.data.status}:${node.selected ? 'selected' : 'idle'}`)
@@ -1186,6 +1326,7 @@ export function PlaygroundCanvas({
     setIsStartingRun(true);
     setCancelRunError(null);
     setActiveRunId(null);
+    setLocallyStartedRunId(null);
     setSelectedNodeSummary(null);
 
     const canvasBounds = canvasRef.current?.getBoundingClientRect();
@@ -1223,6 +1364,7 @@ export function PlaygroundCanvas({
         },
       ]);
       setActiveRunId(run.run_id);
+      setLocallyStartedRunId(run.run_id);
       setStoredActiveRunId(run.run_id);
       setActiveFlowTarget({ nodeId: null, runId: run.run_id });
 
@@ -1267,6 +1409,8 @@ export function PlaygroundCanvas({
     try {
       await resumeAgentRun(activeRunId, answer);
       setDismissedClarificationKey(clarification.requestKey);
+      setLocallyStartedRunId(activeRunId);
+      reconnectRunStream();
       setIsSubmittingClarification(false);
     } catch (error) {
       const message = error instanceof BackendApiError
@@ -1286,6 +1430,8 @@ export function PlaygroundCanvas({
     try {
       await resumeAgentRunApproval(activeRunId, approved);
       setDismissedApprovalKey(approval.requestKey);
+      setLocallyStartedRunId(activeRunId);
+      reconnectRunStream();
       setIsSubmittingApproval(false);
     } catch (error) {
       const message = error instanceof BackendApiError
@@ -1311,6 +1457,8 @@ export function PlaygroundCanvas({
         selection,
       );
       setDismissedAnalysisReviewKey(analysisReview.requestKey);
+      setLocallyStartedRunId(activeRunId);
+      reconnectRunStream();
       setIsSubmittingAnalysisReview(false);
     } catch (error) {
       const message = error instanceof BackendApiError
@@ -1375,7 +1523,7 @@ export function PlaygroundCanvas({
   };
 
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
-    if (node.data.status === 'selecting') return;
+    if (node.data.status === 'selecting' || node.data.kind === 'datasource') return;
 
     setActiveFlowTarget({ nodeId: node.id, runId: node.data.runId ?? null });
 
@@ -1437,6 +1585,7 @@ export function PlaygroundCanvas({
         selectedNodeSummary.parentNodeId,
       );
       setActiveRunId(branchRun.run_id);
+      setLocallyStartedRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
       setActiveFlowTarget({ nodeId: null, runId: branchRun.run_id });
       setSelectedNodeSummary(null);
@@ -1467,11 +1616,19 @@ export function PlaygroundCanvas({
       clearStoredActiveRunId();
       clearStoredPlaygroundGraph();
       setActiveRunId(null);
+      setLocallyStartedRunId(null);
       setActiveFlowTarget(null);
       setVisibleEvents([]);
       setSelectedNodeSummary(null);
       setNodeReportRequest({ data: null, error: null, isLoading: false });
-      setNodes(initialGraph.nodes);
+      const datasourceNode = currentSessionId
+        ? createDatasourceNode(
+            currentSessionId,
+            currentSession,
+            nodes.find((node) => node.data.kind === 'datasource')?.position ?? { x: 0, y: 120 },
+          )
+        : null;
+      setNodes(datasourceNode ? [datasourceNode] : initialGraph.nodes);
       setEdges(initialGraph.edges);
     } catch (error) {
       const message = error instanceof BackendApiError

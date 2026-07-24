@@ -27,6 +27,7 @@ const LIFECYCLE_EVENTS = new Set([
   'agent.completed',
   'agent.discarded',
   'agent.failed',
+  'human_input.resumed',
 ]);
 
 const TERMINAL_RUN_EVENTS = new Set([
@@ -207,6 +208,8 @@ export function deriveNodeGraphFromEvents(
         label: presentation.label,
         description: event.event_type === 'agent.failed'
           ? ERROR_NODE_DESCRIPTION
+          : event.event_type === 'human_input.resumed' && previous
+            ? previous.data.description
           : summaryFromEvent(event),
         kind: presentation.kind,
         status: statusFromEvent(event),
