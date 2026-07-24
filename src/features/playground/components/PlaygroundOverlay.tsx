@@ -89,6 +89,8 @@ interface PlaygroundOverlayProps {
   preview: { sessionId: string; table: string } | null;
   onClosePreview: () => void;
   onCreateNode: (kind: CreatableNodeKind) => void;
+  isLeavingForSessions: boolean;
+  isEnteringFromSessions: boolean;
 }
 
 export function PlaygroundOverlay({
@@ -131,6 +133,8 @@ export function PlaygroundOverlay({
   preview,
   onClosePreview,
   onCreateNode,
+  isLeavingForSessions,
+  isEnteringFromSessions,
 }: PlaygroundOverlayProps) {
   const { activeSection, closeSessionCreate, selectSession, sessionPane, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
@@ -139,7 +143,11 @@ export function PlaygroundOverlay({
   return (
     // 캔버스 전체를 덮되, 클릭은 통과시키고(overlay: pointer-events none)
     // 실제 UI 요소(dock)에서만 클릭을 받는다(pointer-events auto)
-    <div className={styles.overlay}>
+    <div
+      className={`${styles.overlay} ${
+        isLeavingForSessions ? styles.leavingForSessions : ''
+      } ${isEnteringFromSessions ? styles.enteringFromSessions : ''}`}
+    >
       {/* 상단 중앙 고정: 툴바 */}
       {!isSessionView ? <div className={styles.toolbarDock}><Toolbar /></div> : null}
 

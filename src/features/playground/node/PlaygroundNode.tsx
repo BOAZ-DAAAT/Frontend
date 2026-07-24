@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 
+import { BlobOrb } from '@/pages/BlobPage';
+
 import { InlineNodeEditor } from '../node-editor';
 import type { PlaygroundNodeData, PlaygroundNodeKind } from '../types';
 import styles from './PlaygroundNode.module.css';
@@ -108,9 +110,28 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
       ) : null}
 
       <div className={styles.header}>
-        <span className={styles.iconBox}>
-          <NodeIcon className={styles.icon} />
-        </span>
+        {data.status === 'running' ? (
+          <span className={styles.runningBlob} aria-label="노드 생성 중">
+            <BlobOrb
+              active={false}
+              motion={0.48}
+              speed={0.42}
+              label="노드 생성 중"
+            />
+          </span>
+        ) : (
+          <span
+            className={`${styles.iconBox} ${
+              data.status === 'success' ? styles.iconBoxSuccess : ''
+            } ${
+              data.status === 'waiting' ? styles.iconBoxWaiting : ''
+            } ${
+              data.status === 'error' ? styles.iconBoxError : ''
+            }`}
+          >
+            <NodeIcon className={styles.icon} />
+          </span>
+        )}
         <InlineNodeEditor
           value={data.label}
           label="노드 제목"

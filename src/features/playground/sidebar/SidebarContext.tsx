@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useReducer, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react';
 
 import { setCurrentSessionId } from '@/features/session/currentSession';
 import type { Session } from '@/features/session/types';
@@ -16,7 +16,7 @@ type SidebarState = {
 
 type SidebarAction =
   | { type: 'openSection'; section: SidebarSectionId }
-  | { type: 'toggleSessions' }
+  | { type: 'revealSessions' }
   | { type: 'openSessionCreate' }
   | { type: 'closeSessionCreate' }
   | { type: 'selectSession' }
@@ -37,11 +37,8 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
   switch (action.type) {
     case 'openSection':
       return { ...state, activeSection: action.section, isExpanded: true, view: 'navigation' };
-    case 'toggleSessions':
-      if (state.view === 'sessions') {
-        return { ...state, activeSection: null, isExpanded: false, view: 'navigation', sessionPane: 'list' };
-      }
-      return { ...state, activeSection: null, isExpanded: true, view: 'sessions', sessionPane: 'list' };
+    case 'revealSessions':
+      return { ...state, isExpanded: true };
     case 'openSessionCreate':
       return { ...state, activeSection: null, isExpanded: true, view: 'sessions', sessionPane: 'create' };
     case 'closeSessionCreate':
@@ -66,7 +63,7 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
 
 type SidebarContextValue = SidebarState & {
   openSection: (section: SidebarSectionId) => void;
-  toggleSessions: () => void;
+  openSessions: () => void;
   openSessionCreate: () => void;
   closeSessionCreate: () => void;
   selectSession: (session: Session) => void;
@@ -82,21 +79,37 @@ type SidebarProviderProps = {
   /** 리프(테이블/리포트) 선택 시 호출. 향후 별도 오버레이 창 연동용. */
   onSelect?: (node: SidebarNode) => void;
   onSessionSelect?: (session: Session) => void;
+  onOpenSessions?: () => void;
   initialView?: SidebarState['view'];
 };
 
-export function SidebarProvider({ children, onSelect, onSessionSelect, initialView = 'navigation' }: SidebarProviderProps) {
+export function SidebarProvider({
+  children,
+  onSelect,
+  onSessionSelect,
+  onOpenSessions,
+  initialView = 'navigation',
+}: SidebarProviderProps) {
   const [state, dispatch] = useReducer(
     reducer,
     initialView,
-    (view): SidebarState => ({ ...initialState, view, isExpanded: view === 'sessions' }),
+    (view): SidebarState => ({ ...initialState, view, isExpanded: false }),
   );
+
+  useEffect(() => {
+    if (state.view !== 'sessions' || state.isExpanded) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      dispatch({ type: 'revealSessions' });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [state.isExpanded, state.view]);
 
   const value = useMemo<SidebarContextValue>(
     () => ({
       ...state,
       openSection: (section) => dispatch({ type: 'openSection', section }),
-      toggleSessions: () => dispatch({ type: 'toggleSessions' }),
+      openSessions: () => onOpenSessions?.(),
       openSessionCreate: () => dispatch({ type: 'openSessionCreate' }),
       closeSessionCreate: () => dispatch({ type: 'closeSessionCreate' }),
       selectSession: (session) => {
@@ -111,7 +124,7 @@ export function SidebarProvider({ children, onSelect, onSessionSelect, initialVi
         onSelect?.(node);
       },
     }),
-    [state, onSelect, onSessionSelect],
+    [state, onOpenSessions, onSelect, onSessionSelect],
   );
 
   return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;

@@ -1,4 +1,9 @@
 .content {
+  width: 100%;
+  min-width: 0;
+}
+
+.loadedContent {
   display: flex;
   width: 100%;
   min-width: 0;
@@ -24,18 +29,13 @@
   text-align: left;
   transition:
     background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    box-shadow 180ms ease;
 }
 
 .card:hover,
 .currentCard {
   background: rgb(255 255 255 / 86%);
   box-shadow: 0 0.5rem 1.75rem rgb(75 88 118 / 12%);
-}
-
-.card:hover {
-  transform: translateY(-1px);
 }
 
 .card:focus-visible,
@@ -194,17 +194,15 @@
 @keyframes sessionContentReveal {
   from {
     opacity: 0;
-    transform: translateX(-0.25rem);
   }
 
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .content {
+  .loadedContent {
     animation: none;
   }
 }

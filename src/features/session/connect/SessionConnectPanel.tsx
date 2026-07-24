@@ -24,7 +24,7 @@ export function SessionConnectPanel({ onClose, onSessionCreated }: SessionConnec
   const [error, setError] = useState<string | null>(null);
 
   const connection: MySQLConn = { host, port, user, password };
-  const isConnectionReady = Boolean(host && user && password);
+  const isConnectionReady = Boolean(host && user);
 
   const handleConnect = async () => {
     if (!isConnectionReady) return;
