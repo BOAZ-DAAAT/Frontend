@@ -1,42 +1,75 @@
 .wrapper {
   position: relative;
   width: max-content;
+  transform-origin: 0 1.5rem;
+  animation: nodePanelEnter 620ms var(--node-enter-delay, 0ms) cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.queryBadge {
+.wrapper::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 0.5rem;
+  content: '';
+}
+
+.queryBadgeStack {
   position: absolute;
   right: 0.25rem;
   bottom: calc(100% + 0.5rem);
   left: 0.25rem;
   z-index: 4;
+  display: grid;
+  gap: 0.375rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(0.375rem) scale(0.98);
+  transform-origin: bottom center;
+  transition:
+    opacity 180ms ease,
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.queryBadge {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.625rem;
   border: 1px solid rgb(255 255 255 / 72%);
-  border-radius: 999px;
+  border-radius: 0.5rem;
   background: rgb(255 255 255 / 58%);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 84%),
     0 10px 30px rgb(75 88 118 / 12%);
   color: color-mix(in srgb, var(--color-brand-primary) 76%, transparent);
-  backdrop-filter: blur(14px) saturate(142%);
-  -webkit-backdrop-filter: blur(14px) saturate(142%);
+  backdrop-filter: var(--effect-surface-blur) saturate(142%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(142%);
   font: inherit;
   text-align: left;
-  pointer-events: auto;
-  cursor: pointer;
-  appearance: none;
+  max-height: 1.875rem;
+  overflow: hidden;
+  transition:
+    max-height 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 340ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 180ms ease,
+    transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.queryBadge:hover,
-.queryBadge:focus-visible {
-  background: rgb(255 255 255 / 74%);
-  outline: none;
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 90%),
-    0 12px 34px rgb(75 88 118 / 16%);
+.wrapper:hover .queryBadgeStack,
+.wrapper:focus-within .queryBadgeStack {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.queryBadge:hover {
+  align-items: flex-start;
+  max-height: 10rem;
+  padding: 0.625rem;
+  border-radius: 0.5rem;
 }
 
 .queryBadgeLabel {
@@ -57,42 +90,11 @@
   color: color-mix(in srgb, var(--color-brand-primary) 62%, transparent);
 }
 
-.queryPopover {
-  position: absolute;
-  right: 0.25rem;
-  bottom: calc(100% + 2.75rem);
-  left: 0.25rem;
-  z-index: 8;
-  box-sizing: border-box;
-  max-height: 9rem;
+.queryBadge:hover .queryBadgeText {
   overflow-y: auto;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid rgb(255 255 255 / 78%);
-  border-radius: 0.875rem;
-  background: rgb(255 255 255 / 86%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 92%),
-    0 18px 44px rgb(55 65 92 / 22%);
-  color: var(--color-brand-primary);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
-  pointer-events: auto;
-}
-
-.queryPopoverLabel {
-  margin-bottom: 0.375rem;
-  font-size: 0.6875rem;
-  font-weight: var(--font-semibold);
-  color: color-mix(in srgb, var(--color-brand-primary) 76%, transparent);
-}
-
-.queryPopoverText {
-  margin: 0;
-  font-size: 0.75rem;
-  font-weight: var(--font-medium);
-  line-height: 1.55;
-  color: color-mix(in srgb, var(--color-brand-primary) 72%, transparent);
+  text-overflow: clip;
   white-space: normal;
+  line-height: 1.5;
   word-break: keep-all;
 }
 
@@ -100,8 +102,8 @@
   position: relative;
   display: flex;
   box-sizing: border-box;
-  min-width: 20rem;
-  max-width: 23rem;
+  width: 23rem;
+  min-height: 9.75rem;
   flex-direction: column;
   gap: 10px;
   padding: 10px 6px 6px;
@@ -116,13 +118,16 @@
     inset 0 -20px 42px rgb(255 255 255 / 20%),
     0 18px 54px rgb(75 88 118 / 16%),
     0 2px 10px rgb(255 255 255 / 42%);
-  backdrop-filter: blur(18px) saturate(145%);
-  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  backdrop-filter: var(--effect-surface-blur) saturate(145%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(145%);
   isolation: isolate;
   transition:
-    background 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 280ms cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 280ms cubic-bezier(0.16, 1, 0.3, 1);
+    background 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    filter 480ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 480ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .node::before {
@@ -138,8 +143,8 @@
   pointer-events: none;
 }
 
-.nodeSelected,
-.nodeFlowActive {
+.nodeActive {
+  filter: brightness(1.07);
   border-color: rgb(255 255 255 / 92%);
   background:
     linear-gradient(145deg, rgb(255 255 255 / 76%) 0%, rgb(255 255 255 / 28%) 52%, rgb(255 255 255 / 48%) 100%),
@@ -151,78 +156,68 @@
     0 0 18px 4px rgb(255 255 255 / 58%),
     0 0 48px 12px rgb(255 255 255 / 28%),
     0 18px 52px rgb(91 103 136 / 10%);
+  animation: nodeActivate 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.nodeFlowActive {
-  border-color: rgb(255 255 255 / 100%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 100%),
-    inset 0 0 0 1px rgb(255 255 255 / 86%),
-    inset 0 0 18px rgb(255 255 255 / 78%),
-    inset 0 0 42px rgb(255 255 255 / 48%),
-    0 0 22px 6px rgb(255 255 255 / 72%),
-    0 0 72px 18px rgb(255 255 255 / 38%),
-    0 22px 64px rgb(91 103 136 / 16%);
-}
-
-.nodeFlowActive::before {
+.nodeActive::before {
   opacity: 0.92;
 }
 
-.nodeSourceConnected::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  z-index: 2;
-  padding: 1px;
-  border-radius: inherit;
-  background: radial-gradient(
-    circle 48px at 100% 50%,
-    rgb(255 255 255 / 92%) 0%,
-    rgb(255 255 255 / 48%) 42%,
-    transparent 76%
-  );
-  pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
+.nodeSelecting {
+  border-color: rgb(255 255 255 / 58%);
+  background:
+    linear-gradient(
+      145deg,
+      rgb(255 255 255 / 42%) 0%,
+      rgb(255 255 255 / 13%) 52%,
+      rgb(255 255 255 / 24%) 100%
+    ),
+    rgb(255 255 255 / 16%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 76%),
+    inset 0 0 34px rgb(255 255 255 / 18%),
+    0 0 34px rgb(255 255 255 / 24%),
+    0 18px 54px rgb(75 88 118 / 10%);
+  animation: nodeSelectingBreath 2.6s ease-in-out infinite;
 }
 
-.borderFlow {
-  position: absolute;
-  inset: -1px;
-  z-index: 2;
-  width: calc(100% + 2px);
-  height: calc(100% + 2px);
-  overflow: visible;
-  pointer-events: none;
+.nodeSelecting::before {
+  opacity: 0.46;
 }
 
-.borderFlowPath {
-  fill: none;
-  stroke: rgb(255 255 255 / 100%);
-  stroke-width: 1.8px;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  filter:
-    drop-shadow(0 0 4px rgb(255 255 255 / 90%))
-    drop-shadow(0 0 10px rgb(255 255 255 / 42%));
-  vector-effect: non-scaling-stroke;
-  opacity: 1;
+@keyframes nodeActivate {
+  from {
+    filter: brightness(0.91);
+  }
+
+  to {
+    filter: brightness(1.07);
+  }
 }
 
-.borderFlowTop {
-  stroke: rgb(255 255 255 / 100%);
+@keyframes nodeSelectingBreath {
+  0%,
+  100% {
+    filter: brightness(0.98);
+  }
+
+  50% {
+    filter: brightness(1.04);
+  }
 }
 
-.borderFlowBottom {
-  stroke: rgb(255 255 255 / 100%);
-  stroke-width: 2px;
-  filter:
-    drop-shadow(0 0 4px rgb(255 255 255 / 90%))
-    drop-shadow(0 0 10px rgb(255 255 255 / 42%));
+@keyframes nodePanelEnter {
+  from {
+    opacity: 0;
+    filter: blur(8px) brightness(1.08);
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0) brightness(1);
+    transform: translateY(0) scale(1);
+  }
 }
 
 .header {
@@ -237,60 +232,54 @@
 .iconBox {
   position: relative;
   isolation: isolate;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: grid;
   width: 1.75rem;
   height: 1.75rem;
+  flex: 0 0 1.75rem;
   overflow: hidden;
-  border: 0;
-  border-radius: 8px;
-  background: rgb(4 17 42 / 90%);
-  box-shadow: none;
-  color: rgb(255 255 255 / 90%);
-  transform: translateZ(0);
+  border-radius: 999px;
+  place-items: center;
   transition:
-    box-shadow 220ms ease,
-    filter 220ms ease,
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    border-radius 420ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.iconBlob {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.iconBlob > canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4.35rem;
+  max-width: none;
+  height: auto;
+  filter: blur(1.2px) saturate(1.1);
+  transform: translate(-50%, -50%);
 }
 
 .icon {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   width: 0.975rem;
   height: 0.975rem;
-  stroke-width: 1.65;
-  filter: drop-shadow(0 0 2px rgb(255 255 255 / 34%));
+  color: rgb(18 34 62 / 98%);
+  stroke-width: 1.85;
+  filter:
+    drop-shadow(0 0 1px rgb(255 255 255 / 100%))
+    drop-shadow(0 0 3px rgb(255 255 255 / 78%))
+    drop-shadow(0 1px 2px rgb(7 21 47 / 42%));
+  animation: iconReveal 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.iconBoxSuccess {
-  filter: saturate(1.06) brightness(1.07);
-}
-
-.iconBoxWaiting {
-  animation: waitingIconGlow 1.8s ease-in-out infinite;
-}
-
-.iconBoxError {
-  filter: saturate(0.92) brightness(0.94);
-}
-
-.nodeSelected .iconBox {
-  filter: saturate(1.1) brightness(1.1);
-  transform: scale(1.035);
-}
-
-@keyframes waitingIconGlow {
-  0%,
-  100% {
-    filter: saturate(0.94) brightness(0.94);
-  }
-
-  50% {
-    filter: saturate(1.08) brightness(1.1);
-  }
+.iconBoxWorking {
+  border-radius: 999px;
 }
 
 .title {
@@ -302,6 +291,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-brand-primary);
+  animation: nodeTextEnter 360ms calc(var(--node-enter-delay, 0ms) + 170ms) cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .runningBlob {
@@ -330,6 +320,18 @@
 @keyframes runningBlobSpin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes iconReveal {
+  from {
+    opacity: 0;
+    transform: scale(0.62) rotate(-10deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
   }
 }
 
@@ -370,6 +372,30 @@
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: color-mix(in srgb, var(--color-brand-primary) 72%, transparent);
+  animation: nodeTextEnter 400ms calc(var(--node-enter-delay, 0ms) + 250ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.workingDescription {
+  color: transparent;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgb(25 29 38 / 46%) 0,
+      rgb(25 29 38 / 46%) 12rem,
+      rgb(25 29 38 / 68%) 14rem,
+      rgb(13 17 25 / 94%) 16rem,
+      rgb(25 29 38 / 68%) 18rem,
+      rgb(25 29 38 / 46%) 20rem,
+      rgb(25 29 38 / 46%) 32rem
+    );
+  background-clip: text;
+  background-position: -32rem 50%;
+  background-size: 32rem 100%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation:
+    nodeTextEnter 400ms calc(var(--node-enter-delay, 0ms) + 250ms) cubic-bezier(0.16, 1, 0.3, 1) both,
+    workingTextFlow 3s linear infinite;
 }
 
 .body {
@@ -381,16 +407,64 @@
 }
 
 .content {
+  display: flex;
+  min-height: 6.25rem;
   box-sizing: border-box;
   padding: 1rem;
+  align-items: flex-start;
   border-radius: 0.5rem;
   border: 1px solid rgb(255 255 255 / 56%);
   background: linear-gradient(145deg, rgb(255 255 255 / 58%), rgb(255 255 255 / 26%));
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 70%),
     0 10px 34px rgb(75 88 118 / 9%);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: var(--effect-surface-blur) saturate(130%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(130%);
+  animation: bodyPanelEnter 520ms calc(var(--node-enter-delay, 0ms) + 150ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.nodeWorking .content {
+  border-color: rgb(255 255 255 / 7%);
+  background: rgb(255 255 255 / 3%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+@keyframes workingTextFlow {
+  from {
+    background-position: -32rem 50%;
+  }
+
+  to {
+    background-position: 0 50%;
+  }
+}
+
+@keyframes bodyPanelEnter {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(0.625rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes nodeTextEnter {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+    transform: translateY(0.375rem);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
 }
 
 .chartBox {
@@ -404,8 +478,8 @@
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 70%),
     0 10px 34px rgb(75 88 118 / 9%);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: var(--effect-surface-blur) saturate(130%);
+  -webkit-backdrop-filter: var(--effect-surface-blur) saturate(130%);
 }
 
 .chartPlot {
@@ -448,15 +522,27 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .node {
+  .wrapper,
+  .node,
+  .content {
+    animation: none;
     transition: none;
   }
 
-  .runningBlob {
+  .nodeActive {
     animation: none;
   }
 
-  .iconBoxWaiting {
+  .nodeSelecting,
+  .iconBlob,
+  .icon,
+  .title,
+  .description,
+  .workingDescription {
+    animation: none;
+  }
+
+  .runningBlob {
     animation: none;
   }
 

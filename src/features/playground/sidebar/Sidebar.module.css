@@ -7,8 +7,8 @@
   background: rgb(255 255 255 / 20%);
   border: 0;
   outline: 1px solid rgb(255 255 255 / 50%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
   max-height: calc(100vh - 3rem);
   overflow-y: auto;
@@ -23,8 +23,8 @@
   padding: 1rem 0.5rem;
   outline-color: rgb(255 255 255 / 20%);
   background: rgb(255 255 255 / 20%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%);
 }
 

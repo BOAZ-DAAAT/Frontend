@@ -1,10 +1,11 @@
+import { useEffect } from 'react';
+
 import { AccountStack } from '@/features/playground/account/AccountStack';
 import { LoaderCircle, Trash2 } from 'lucide-react';
 import { PromptComposer } from '@/features/playground/composer/PromptComposer';
 import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-editor';
 import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummaryPanel';
 import { GeneratedReportPanel } from '@/features/playground/report/GeneratedReportPanel';
-import { ReportConfirmDialog } from '@/features/playground/report/ReportConfirmDialog';
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
 import type { AgentNodeReportResponse } from '@/features/playground/report/types';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
@@ -26,48 +27,45 @@ interface PlaygroundOverlayProps {
   onPromptSend: (prompt: string) => Promise<void>;
   clarification: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     question: string;
   } | null;
   analysisReview: {
     eventId: string | null;
-    agentName: string;
+    requestKey: string;
     approvalId: string;
-    question: string;
-    proposal: string;
-    rationale: string[];
-    options: {
+    agentName: string;
+    content: string;
+    options: Array<{
       id: string;
       label: string;
-      method: string;
-      advantages: string[];
-      limitations: string[];
-      impact: string;
       recommended: boolean;
-    }[];
-    recommendedOptionId: string;
+    }>;
     allowFreeText: boolean;
-    freeTextPrompt: string;
   } | null;
+  isSubmittingAnalysisReview: boolean;
+  analysisReviewError: string | null;
+  onAnalysisReviewDecision: (
+    selection: { selectedOptionId?: string; freeText?: string },
+  ) => Promise<void>;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
   onClarificationSend: (answer: string) => Promise<void>;
   approval: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     reason: string;
   } | null;
   isSubmittingApproval: boolean;
   approvalError: string | null;
   onApprovalDecision: (approved: boolean) => Promise<void>;
-  isSubmittingAnalysisReview: boolean;
-  analysisReviewError: string | null;
-  onAnalysisReviewDecision: (decision: { selectedOptionId?: string; freeText?: string }) => Promise<void>;
   nodeSummary: {
     id: string;
     label: string;
     kind: PlaygroundNodeKind;
-    status: 'idle' | 'running' | 'waiting' | 'success' | 'error';
+    status: 'selecting' | 'idle' | 'running' | 'waiting' | 'success' | 'error';
   } | null;
   nodeSummaryData: NodeSummary | null;
   nodeSummaryRunId: string | null;
@@ -78,9 +76,6 @@ interface PlaygroundOverlayProps {
   generatedReportError: string | null;
   isGeneratingReport: boolean;
   onCloseGeneratedReport: () => void;
-  pendingReportConfirmation: { runId: string; nodeId: string; label: string } | null;
-  onConfirmReportGeneration: () => void;
-  onCancelReportGeneration: () => void;
   onBranchPromptSend: (prompt: string) => Promise<void>;
   canDeleteAllNodes: boolean;
   isDeletingAllNodes: boolean;
@@ -102,6 +97,9 @@ export function PlaygroundOverlay({
   onPromptSend,
   clarification,
   analysisReview,
+  isSubmittingAnalysisReview,
+  analysisReviewError,
+  onAnalysisReviewDecision,
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
@@ -109,9 +107,6 @@ export function PlaygroundOverlay({
   isSubmittingApproval,
   approvalError,
   onApprovalDecision,
-  isSubmittingAnalysisReview,
-  analysisReviewError,
-  onAnalysisReviewDecision,
   nodeSummary,
   nodeSummaryData,
   nodeSummaryRunId,
@@ -122,9 +117,6 @@ export function PlaygroundOverlay({
   generatedReportError,
   isGeneratingReport,
   onCloseGeneratedReport,
-  pendingReportConfirmation,
-  onConfirmReportGeneration,
-  onCancelReportGeneration,
   onBranchPromptSend,
   canDeleteAllNodes,
   isDeletingAllNodes,
@@ -139,6 +131,12 @@ export function PlaygroundOverlay({
   const { activeSection, closeSessionCreate, selectSession, sessionPane, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
   const isSessionView = view === 'sessions';
+
+  useEffect(() => {
+    if (isReportWorkspaceOpen && preview) {
+      onClosePreview();
+    }
+  }, [isReportWorkspaceOpen, onClosePreview, preview]);
 
   return (
     // 캔버스 전체를 덮되, 클릭은 통과시키고(overlay: pointer-events none)
@@ -157,14 +155,6 @@ export function PlaygroundOverlay({
 
       {!isSessionView && isReportWorkspaceOpen ? <ReportWorkspace /> : null}
 
-      {!isSessionView && pendingReportConfirmation ? (
-        <ReportConfirmDialog
-          label={pendingReportConfirmation.label}
-          onConfirm={onConfirmReportGeneration}
-          onCancel={onCancelReportGeneration}
-        />
-      ) : null}
-
       {!isSessionView && (generatedReport || generatedReportError || isGeneratingReport) ? (
         <GeneratedReportPanel
           data={generatedReport}
@@ -174,7 +164,7 @@ export function PlaygroundOverlay({
         />
       ) : null}
 
-      {!isSessionView && preview ? (
+      {!isSessionView && !isReportWorkspaceOpen && preview ? (
         <TablePreviewPanel
           sessionId={preview.sessionId}
           table={preview.table}
@@ -234,6 +224,9 @@ export function PlaygroundOverlay({
           onSend={onPromptSend}
           clarification={clarification}
           analysisReview={analysisReview}
+          isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+          analysisReviewError={analysisReviewError}
+          onAnalysisReviewDecision={onAnalysisReviewDecision}
           isSubmittingClarification={isSubmittingClarification}
           clarificationError={clarificationError}
           onClarificationSend={onClarificationSend}
@@ -241,9 +234,6 @@ export function PlaygroundOverlay({
           isSubmittingApproval={isSubmittingApproval}
           approvalError={approvalError}
           onApprovalDecision={onApprovalDecision}
-          isSubmittingAnalysisReview={isSubmittingAnalysisReview}
-          analysisReviewError={analysisReviewError}
-          onAnalysisReviewDecision={onAnalysisReviewDecision}
         />
       </div> : null}
     </div>

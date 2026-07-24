@@ -1,8 +1,8 @@
 import {
   Handle,
   Position,
-  useEdges,
-  useNodeConnections,
+  useNodes,
+  useUpdateNodeInternals,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
@@ -15,17 +15,23 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 
 import { BlobOrb } from '@/pages/BlobPage';
 
 import { InlineNodeEditor } from '../node-editor';
-import type { PlaygroundNodeData, PlaygroundNodeKind } from '../types';
+import {
+  ERROR_NODE_DESCRIPTION,
+  type PlaygroundNodeData,
+  type PlaygroundNodeKind,
+  type PlaygroundNodeQuery,
+} from '../types';
 import styles from './PlaygroundNode.module.css';
 
 type PlaygroundNodeType = Node<PlaygroundNodeData, 'playground'>;
 
 const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
+  supervisor: ScanSearch,
   datasource: Database,
   'sql-agent': SquareTerminal,
   'EDA-agent': ChartNoAxesCombined,
@@ -33,51 +39,81 @@ const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
   'insight-agent': Lightbulb,
 };
 
-export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>) {
-  const [isQueryOpen, setIsQueryOpen] = useState(false);
+export function PlaygroundNode({ id, data, selected }: NodeProps<PlaygroundNodeType>) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const measuredWidthRef = useRef<number | null>(null);
+  const updateNodeInternals = useUpdateNodeInternals();
   const NodeIcon = NODE_ICONS[data.kind];
-  const edges = useEdges();
-  const targetConnections = useNodeConnections({ handleType: 'target' });
-  const sourceConnections = useNodeConnections({ handleType: 'source' });
-  const activeEdgeIds = new Set(
-    edges
-      .filter((edge) => edge.data?.flowState === 'active')
-      .map((edge) => edge.id),
+  const isSelecting = data.status === 'selecting';
+  const isError = data.status === 'error';
+  const isWorking = (
+    isSelecting
+    || data.status === 'running'
+    || data.status === 'waiting'
   );
-  const hasActiveTarget = targetConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
-  const hasActiveSource = sourceConnections.some((connection) => activeEdgeIds.has(connection.edgeId));
-  const isFlowActive = hasActiveTarget || hasActiveSource;
-  const canDeleteRun = Boolean(data.runId && data.onDeleteRun);
+  const flowRunning = useNodes<PlaygroundNodeType>().some(
+    (node) => (
+      node.data.status === 'selecting'
+      || node.data.status === 'running'
+      || node.data.status === 'waiting'
+    ),
+  );
+  const isActive = (
+    data.status === 'running'
+    || data.status === 'waiting'
+    || (selected && !flowRunning)
+  );
+  const canDeleteRun = Boolean(!isSelecting && data.runId && data.onDeleteRun);
+  const enterDelay = Math.max((data.nodeSequence ?? 1) - 1, 0) * 90;
+  const queryBadges: PlaygroundNodeQuery[] = data.queryBadges
+    ?? (data.queryLabel && data.queryText ? [{ label: data.queryLabel, text: data.queryText }] : []);
+
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return undefined;
+
+    const observer = new ResizeObserver(([entry]) => {
+      const nextWidth = entry.contentRect.width;
+      if (measuredWidthRef.current === nextWidth) return;
+      measuredWidthRef.current = nextWidth;
+      updateNodeInternals(id);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [id, updateNodeInternals]);
 
   return (
-    <div className={styles.wrapper}>
-      {data.queryLabel && data.queryText ? (
-        <button
-          type="button"
-          className={styles.queryBadge}
-          title={data.queryText}
-          aria-expanded={isQueryOpen}
-          aria-label={`${data.queryLabel} 전체 보기`}
-          onClick={(event) => {
-            event.stopPropagation();
-            setIsQueryOpen((current) => !current);
-          }}
+    <div
+      ref={wrapperRef}
+      className={styles.wrapper}
+      style={{ '--node-enter-delay': `${enterDelay}ms` } as CSSProperties}
+    >
+      {queryBadges.length ? (
+        <div
+          className={styles.queryBadgeStack}
+          aria-label="이 노드의 쿼리"
+          onMouseLeave={() => data.onFlowHover?.(null)}
         >
-          <span className={styles.queryBadgeLabel}>{data.queryLabel}</span>
-          <span className={styles.queryBadgeText}>{data.queryText}</span>
-        </button>
-      ) : null}
-      {data.queryLabel && data.queryText && isQueryOpen ? (
-        <div className={styles.queryPopover} role="dialog" aria-label={`${data.queryLabel} 전체 내용`}>
-          <div className={styles.queryPopoverLabel}>{data.queryLabel}</div>
-          <p className={styles.queryPopoverText}>{data.queryText}</p>
+          {queryBadges.map((query, index) => (
+            <div
+              key={`${query.label}:${query.text}:${index}`}
+              className={styles.queryBadge}
+              aria-label={`${query.label}: ${query.text}`}
+              onMouseEnter={() => data.onFlowHover?.(query.flowNodeId ?? id)}
+            >
+              {query.label !== '원본 쿼리' ? (
+                <span className={styles.queryBadgeLabel}>{query.label}</span>
+              ) : null}
+              <span className={styles.queryBadgeText}>{query.text}</span>
+            </div>
+          ))}
         </div>
       ) : null}
       <div
-        className={`${styles.node} ${selected ? styles.nodeSelected : ''} ${
-          isFlowActive ? styles.nodeFlowActive : ''
-        } ${
-          hasActiveSource ? styles.nodeSourceConnected : ''
+        className={`${styles.node} ${
+          isSelecting ? styles.nodeSelecting : ''
+        } ${isWorking ? styles.nodeWorking : ''} ${
+          isActive ? styles.nodeActive : ''
         }`}
       >
       <Handle
@@ -87,56 +123,31 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
         className={styles.edgeAnchor}
       />
 
-      {isFlowActive ? (
-        <svg
-          className={`${styles.borderFlow} ${
-            hasActiveSource ? styles.borderFlowSource : ''
-          } ${hasActiveTarget ? styles.borderFlowTarget : ''}`}
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <path
-            className={`${styles.borderFlowPath} ${styles.borderFlowTop}`}
-            d="M 0 50 L 0 6 Q 0 0 6 0 L 94 0 Q 100 0 100 6 L 100 50"
-            pathLength={100}
-          />
-          <path
-            className={`${styles.borderFlowPath} ${styles.borderFlowBottom}`}
-            d="M 0 50 L 0 94 Q 0 100 6 100 L 94 100 Q 100 100 100 94 L 100 50"
-            pathLength={100}
-          />
-        </svg>
-      ) : null}
-
       <div className={styles.header}>
-        {data.status === 'running' ? (
-          <span className={styles.runningBlob} aria-label="노드 생성 중">
+        <span
+          className={`${styles.iconBox} ${
+            isWorking ? styles.iconBoxWorking : ''
+          }`}
+        >
+          <span className={styles.iconBlob} aria-hidden="true">
             <BlobOrb
-              active={false}
-              motion={0.48}
-              speed={0.42}
-              label="노드 생성 중"
+              active={isWorking}
+              motion={isWorking ? 1 : 0.48}
+              speed={isWorking ? 0.46 : 0.20}
+              tone={isError ? 'error' : 'default'}
             />
           </span>
+          {!isWorking ? <NodeIcon className={styles.icon} aria-hidden="true" /> : null}
+        </span>
+        {isSelecting ? (
+          <span className={styles.title}>{data.label}</span>
         ) : (
-          <span
-            className={`${styles.iconBox} ${
-              data.status === 'success' ? styles.iconBoxSuccess : ''
-            } ${
-              data.status === 'waiting' ? styles.iconBoxWaiting : ''
-            } ${
-              data.status === 'error' ? styles.iconBoxError : ''
-            }`}
-          >
-            <NodeIcon className={styles.icon} />
-          </span>
+          <InlineNodeEditor
+            value={data.label}
+            label="노드 제목"
+            className={styles.title}
+          />
         )}
-        <InlineNodeEditor
-          value={data.label}
-          label="노드 제목"
-          className={styles.title}
-        />
         {canDeleteRun ? (
           <button
             type="button"
@@ -154,15 +165,23 @@ export function PlaygroundNode({ data, selected }: NodeProps<PlaygroundNodeType>
 
       <div className={styles.body}>
         <div className={styles.content}>
-          <InlineNodeEditor
-            multiline
-            value={data.description}
-            label="노드 작업 요약"
-            className={styles.description}
-          />
+          {isWorking ? (
+            <p className={`${styles.description} ${styles.workingDescription}`}>
+              {data.description}
+            </p>
+          ) : isError ? (
+            <p className={styles.description}>{ERROR_NODE_DESCRIPTION}</p>
+          ) : (
+            <InlineNodeEditor
+              multiline
+              value={data.description}
+              label="노드 작업 요약"
+              className={styles.description}
+            />
+          )}
         </div>
 
-        {data.chart ? (
+        {!isWorking && !isError && data.chart ? (
           <div className={styles.chartBox} role="img" aria-label={data.chart.label}>
             <div className={styles.chartPlot}>
               {data.chart.values.map((value, index) => (

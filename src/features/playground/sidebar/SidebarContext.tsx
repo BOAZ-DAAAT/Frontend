@@ -20,6 +20,7 @@ type SidebarAction =
   | { type: 'openSessionCreate' }
   | { type: 'closeSessionCreate' }
   | { type: 'selectSession' }
+  | { type: 'beginCollapse' }
   | { type: 'collapse' }
   | { type: 'toggleFolder'; id: string }
   | { type: 'selectItem'; id: string };
@@ -45,6 +46,8 @@ function reducer(state: SidebarState, action: SidebarAction): SidebarState {
       return { ...state, sessionPane: 'list' };
     case 'selectSession':
       return { ...state, activeSection: null, isExpanded: false, view: 'navigation', sessionPane: 'list' };
+    case 'beginCollapse':
+      return { ...state, isExpanded: false };
     case 'collapse':
       // 레일로 돌아오면 섹션 선택도 해제 (초기 상태처럼)
       return { ...state, isExpanded: false, activeSection: null, view: 'navigation', sessionPane: 'list' };
@@ -67,6 +70,7 @@ type SidebarContextValue = SidebarState & {
   openSessionCreate: () => void;
   closeSessionCreate: () => void;
   selectSession: (session: Session) => void;
+  beginCollapse: () => void;
   collapse: () => void;
   toggleFolder: (id: string) => void;
   selectItem: (node: SidebarNode) => void;
@@ -117,6 +121,7 @@ export function SidebarProvider({
         dispatch({ type: 'selectSession' });
         onSessionSelect?.(session);
       },
+      beginCollapse: () => dispatch({ type: 'beginCollapse' }),
       collapse: () => dispatch({ type: 'collapse' }),
       toggleFolder: (id) => dispatch({ type: 'toggleFolder', id }),
       selectItem: (node) => {

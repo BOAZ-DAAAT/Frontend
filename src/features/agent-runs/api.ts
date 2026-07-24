@@ -33,6 +33,13 @@ export type AgentRunDeleteResponse = {
   deleted_artifact_count: number;
 };
 
+export type AgentSessionRunsDeleteResponse = {
+  session_id: string;
+  deleted_run_count: number;
+  deleted_event_count: number;
+  deleted_artifact_count: number;
+};
+
 export type AgentRunCancelResponse = {
   run_id: string;
   status: 'cancelled';
@@ -52,6 +59,12 @@ export function getAgentRun(runId: string) {
 
 export function deleteAgentRun(runId: string) {
   return apiClient.delete<AgentRunDeleteResponse>(`/agent-runs/${encodeURIComponent(runId)}`);
+}
+
+export function deleteAgentSessionRuns(sessionId: string) {
+  return apiClient.delete<AgentSessionRunsDeleteResponse>(
+    `/agent-runs/session-runs?session_id=${encodeURIComponent(sessionId)}`,
+  );
 }
 
 export function cancelAgentRun(runId: string) {
@@ -96,20 +109,19 @@ export function resumeAgentRunApproval(runId: string, approved: boolean, reason?
   );
 }
 
-export type AnalysisReviewDecisionPayload = {
-  approvalId: string;
-  selectedOptionId?: string;
-  freeText?: string;
-};
-
-export function resumeAnalysisReview(runId: string, decision: AnalysisReviewDecisionPayload) {
+export function resumeAgentRunAnalysisReview(
+  runId: string,
+  approvalId: string,
+  selection: { selectedOptionId?: string; freeText?: string },
+) {
   return apiClient.post<AgentRunResumeResponse>(
     `/agent-runs/${encodeURIComponent(runId)}/resume`,
     {
       type: 'analysis_review',
-      approval_id: decision.approvalId,
-      ...(decision.selectedOptionId ? { selected_option_id: decision.selectedOptionId } : {}),
-      ...(decision.freeText ? { free_text: decision.freeText } : {}),
+      approval_id: approvalId,
+      ...(selection.selectedOptionId
+        ? { selected_option_id: selection.selectedOptionId }
+        : { free_text: selection.freeText }),
     },
   );
 }

@@ -7,6 +7,7 @@ import {
   type Node,
   type NodeChange,
   type OnNodeDrag,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 
@@ -17,10 +18,11 @@ import {
   cancelAgentRun,
   createAgentRun,
   deleteAgentRun,
+  deleteAgentSessionRuns,
   listAgentSessionEvents,
   resumeAgentRun,
+  resumeAgentRunAnalysisReview,
   resumeAgentRunApproval,
-  resumeAnalysisReview,
   type BranchStage,
 } from '@/features/agent-runs/api';
 import {
@@ -46,7 +48,7 @@ import type { AgentNodeReportResponse } from '@/features/playground/report/types
 import { deriveNodeGraphFromEvents } from '@/features/playground/runEventGraph';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import { useMode } from '@/features/playground/toolbar/ModeContext';
-import type { PlaygroundNodeData } from '@/features/playground/types';
+import type { PlaygroundNodeData, PlaygroundNodeQuery } from '@/features/playground/types';
 import type { RunEvent, RunSummary } from '@/features/runs/types';
 import { getCurrentSessionId } from '@/features/session/currentSession';
 import { BackendApiError } from '@/lib/apiClient';
@@ -61,6 +63,14 @@ const ALIGNMENT_SNAP_THRESHOLD = 56;
 const ALIGNMENT_SNAP_DURATION = 260;
 const FALLBACK_NODE_WIDTH = 320;
 const FOLLOW_RESPONSE = 0.3;
+const NODE_CREATION_X_GAP = 460;
+const NODE_CREATION_BRANCH_Y_GAP = 240;
+const INITIAL_NODE_WIDTH = 368;
+const INITIAL_NODE_HEIGHT = 156;
+const NEW_PROMPT_NODE_Y_GAP = 220;
+const QUERY_BADGE_HEIGHT = 30;
+const QUERY_BADGE_GAP = 6;
+const QUERY_BADGE_OFFSET = 8;
 
 const NODE_DEFAULTS: Record<CreatableNodeKind, Pick<PlaygroundNodeData, 'label' | 'description'>> = {
   'sql-agent': {
@@ -97,37 +107,30 @@ type PlaygroundCanvasProps = {
 
 type Clarification = {
   eventId: string | null;
+  requestKey: string;
   agentName: string;
   question: string;
 };
 
 type Approval = {
   eventId: string | null;
+  requestKey: string;
   agentName: string;
   reason: string;
 };
 
-type AnalysisReviewOption = {
-  id: string;
-  label: string;
-  method: string;
-  advantages: string[];
-  limitations: string[];
-  impact: string;
-  recommended: boolean;
-};
-
 type AnalysisReview = {
   eventId: string | null;
-  agentName: string;
+  requestKey: string;
   approvalId: string;
-  question: string;
-  proposal: string;
-  rationale: string[];
-  options: AnalysisReviewOption[];
-  recommendedOptionId: string;
+  agentName: string;
+  content: string;
+  options: Array<{
+    id: string;
+    label: string;
+    recommended: boolean;
+  }>;
   allowFreeText: boolean;
-  freeTextPrompt: string;
 };
 
 type SelectedNodeSummary = {
@@ -136,6 +139,12 @@ type SelectedNodeSummary = {
   label: string;
   kind: PlaygroundNodeData['kind'];
   status: PlaygroundNodeData['status'];
+  parentNodeId: string | null;
+};
+
+type ActiveFlowTarget = {
+  nodeId: string | null;
+  runId: string | null;
 };
 
 type NodeSummaryRequest = {
@@ -148,17 +157,6 @@ type NodeReportRequest = {
   data: AgentNodeReportResponse | null;
   error: string | null;
   isLoading: boolean;
-};
-
-type PendingReportConfirmation = {
-  runId: string;
-  nodeId: string;
-  label: string;
-};
-
-type PositionOffset = {
-  x: number;
-  y: number;
 };
 
 function getDescendantDepths(edges: Edge[], rootId: string): Map<string, number> {
@@ -182,13 +180,99 @@ function getDescendantDepths(edges: Edge[], rootId: string): Map<string, number>
   return descendants;
 }
 
+function getNewPromptNodePosition(
+  currentNodes: Array<Node<PlaygroundNodeData>>,
+  viewportCenter: { x: number; y: number },
+) {
+  if (!currentNodes.length) {
+    return {
+      x: viewportCenter.x - INITIAL_NODE_WIDTH / 2,
+      y: viewportCenter.y - INITIAL_NODE_HEIGHT / 2,
+    };
+  }
+
+  const flowStartX = Math.min(...currentNodes.map((node) => node.position.x));
+  const flowBottom = Math.max(...currentNodes.map((node) => (
+    node.position.y + (node.measured?.height ?? node.height ?? INITIAL_NODE_HEIGHT)
+  )));
+
+  return {
+    x: flowStartX,
+    y: flowBottom + NEW_PROMPT_NODE_Y_GAP,
+  };
+}
+
+function getNodeCollisionBounds(
+  node: Node<PlaygroundNodeData>,
+  position: { x: number; y: number },
+) {
+  const queryBadgeCount = node.data.queryBadges?.length
+    ?? (node.data.queryLabel && node.data.queryText ? 1 : 0);
+  const width = node.measured?.width ?? node.width ?? FALLBACK_NODE_WIDTH;
+  const height = node.measured?.height ?? node.height ?? INITIAL_NODE_HEIGHT;
+  const queryBadgeHeight = queryBadgeCount
+    ? QUERY_BADGE_OFFSET + queryBadgeCount * QUERY_BADGE_HEIGHT + (queryBadgeCount - 1) * QUERY_BADGE_GAP
+    : 0;
+  const top = position.y - queryBadgeHeight;
+
+  return {
+    left: position.x,
+    right: position.x + width,
+    top,
+    bottom: position.y + height,
+  };
+}
+
+function boundsOverlap(
+  left: ReturnType<typeof getNodeCollisionBounds>,
+  right: ReturnType<typeof getNodeCollisionBounds>,
+) {
+  return (
+    left.left < right.right
+    && left.right > right.left
+    && left.top < right.bottom
+    && left.bottom > right.top
+  );
+}
+
 function getDescendantNodeIds(edges: Edge[], rootId: string): Set<string> {
   return new Set(getDescendantDepths(edges, rootId).keys());
+}
+
+function getAncestorEdgeIds(edges: Edge[], targetIds: string[]): Set<string> {
+  const ancestorEdgeIds = new Set<string>();
+  const pending = [...targetIds];
+  const visitedNodes = new Set(targetIds);
+
+  while (pending.length) {
+    const targetId = pending.pop();
+    if (!targetId) continue;
+
+    for (const edge of edges) {
+      if (edge.target !== targetId || ancestorEdgeIds.has(edge.id)) continue;
+      ancestorEdgeIds.add(edge.id);
+      if (visitedNodes.has(edge.source)) continue;
+      visitedNodes.add(edge.source);
+      pending.push(edge.source);
+    }
+  }
+
+  return ancestorEdgeIds;
 }
 
 function metadataString(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = metadata?.[key];
   return typeof value === 'string' && value.trim() ? value : null;
+}
+
+function metadataObject(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+): Record<string, unknown> | null {
+  const value = metadata?.[key];
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function interruptType(metadata: Record<string, unknown> | null | undefined) {
@@ -197,22 +281,27 @@ function interruptType(metadata: Record<string, unknown> | null | undefined) {
 
 function getClarification(run: RunSummary | null, events: RunEvent[]): Clarification | null {
   let waitingEvent: RunEvent | null = null;
+  let wasResumed = false;
 
   for (const event of events) {
+    if (!run || event.run_id !== run.run_id) continue;
     if (
       event.event_type === 'human_input.required'
       && interruptType(event.metadata) === 'clarification'
     ) {
       waitingEvent = event;
+      wasResumed = false;
     }
     if (
       event.event_type === 'human_input.resumed'
       && interruptType(event.metadata) === 'clarification'
     ) {
       waitingEvent = null;
+      wasResumed = true;
     }
   }
 
+  if (wasResumed) return null;
   if (!waitingEvent && (
     run?.status !== 'waiting_input'
     || interruptType(run.metadata) !== 'clarification'
@@ -230,93 +319,126 @@ function getClarification(run: RunSummary | null, events: RunEvent[]): Clarifica
     ? 'Supervisor Agent'
     : rawAgentName;
 
-  return { eventId: waitingEvent?.event_id ?? null, agentName, question };
+  const eventId = waitingEvent?.event_id ?? null;
+  return {
+    eventId,
+    requestKey: eventId ?? `${run?.run_id ?? 'run'}:clarification:${run?.updated_at ?? question}`,
+    agentName,
+    question,
+  };
 }
 
 function getApproval(run: RunSummary | null, events: RunEvent[]): Approval | null {
   if (run?.status !== 'waiting_approval') return null;
 
   let waitingEvent: RunEvent | null = null;
+  let wasResumed = false;
   for (const event of events) {
-    if (event.event_type === 'agent.waiting') waitingEvent = event;
-    if (event.event_type === 'human_input.resumed') waitingEvent = null;
+    if (event.run_id !== run.run_id) continue;
+    if (
+      event.event_type === 'human_input.required'
+      && interruptType(event.metadata) === 'approval'
+    ) {
+      waitingEvent = event;
+      wasResumed = false;
+    } else if (event.event_type === 'agent.waiting' && waitingEvent === null) {
+      // 이전 백엔드 이벤트도 복원할 수 있도록 유지한다.
+      waitingEvent = event;
+      wasResumed = false;
+    }
+    if (
+      event.event_type === 'human_input.resumed'
+      && interruptType(event.metadata) === 'approval'
+    ) {
+      waitingEvent = null;
+      wasResumed = true;
+    }
   }
 
+  if (wasResumed) return null;
   const reason = waitingEvent?.message
     ?? metadataString(run.metadata, 'reason')
     ?? '결과를 승인해 주세요.';
   const rawAgentName = waitingEvent?.node_name ?? 'analysis_agent';
 
-  return { eventId: waitingEvent?.event_id ?? null, agentName: rawAgentName, reason };
-}
-
-function reviewOptionFromMetadata(value: unknown): AnalysisReviewOption | null {
-  if (!value || typeof value !== 'object') return null;
-  const option = value as Record<string, unknown>;
-  const id = typeof option.id === 'string' ? option.id : '';
-  if (!id) return null;
-  const stringList = (input: unknown): string[] => (
-    Array.isArray(input) ? input.filter((item): item is string => typeof item === 'string') : []
-  );
+  const eventId = waitingEvent?.event_id ?? null;
   return {
-    id,
-    label: typeof option.label === 'string' ? option.label : id,
-    method: typeof option.method === 'string' ? option.method : '',
-    advantages: stringList(option.advantages),
-    limitations: stringList(option.limitations),
-    impact: typeof option.impact === 'string' ? option.impact : '',
-    recommended: option.recommended === true,
+    eventId,
+    requestKey: eventId ?? `${run.run_id}:approval:${run.updated_at ?? reason}`,
+    agentName: rawAgentName,
+    reason,
   };
 }
 
 function getAnalysisReview(run: RunSummary | null, events: RunEvent[]): AnalysisReview | null {
   let reviewEvent: RunEvent | null = null;
+  let wasResumed = false;
 
   for (const event of events) {
+    if (!run || event.run_id !== run.run_id) continue;
     if (interruptType(event.metadata) !== 'analysis_review') continue;
 
     if (['approval.required', 'analysis_review.required', 'human_input.required'].includes(event.event_type)) {
       reviewEvent = event;
+      wasResumed = false;
     }
     if (['approval.resolved', 'analysis_review.resolved', 'human_input.resumed'].includes(event.event_type)) {
       reviewEvent = null;
+      wasResumed = true;
     }
   }
 
+  if (wasResumed) return null;
   if (!reviewEvent && (
-    run?.status !== 'waiting_input'
+    run?.status !== 'waiting_approval'
     || interruptType(run.metadata) !== 'analysis_review'
   )) return null;
-  if (!reviewEvent) return null;
 
-  const approvalId = metadataString(reviewEvent.metadata, 'approval_id');
-  const reviewRequest = reviewEvent.metadata?.review_request;
-  if (!approvalId || !reviewRequest || typeof reviewRequest !== 'object') return null;
-
-  const request = reviewRequest as Record<string, unknown>;
-  const options = Array.isArray(request.options)
-    ? request.options.map(reviewOptionFromMetadata).filter((option): option is AnalysisReviewOption => option !== null)
-    : [];
-  const agentName = metadataString(reviewEvent.metadata, 'agent_name')
-    ?? reviewEvent.node_name
+  const reviewRequest = metadataObject(reviewEvent?.metadata, 'review_request')
+    ?? metadataObject(run?.metadata, 'review_request');
+  const content = metadataString(reviewRequest, 'question')
+    ?? metadataString(reviewRequest, 'proposal')
+    ?? metadataString(reviewEvent?.metadata, 'answer')
+    ?? metadataString(reviewEvent?.metadata, 'content')
+    ?? metadataString(reviewEvent?.metadata, 'review')
+    ?? reviewEvent?.message
+    ?? metadataString(run?.metadata, 'answer')
+    ?? '분석 결과를 검토한 뒤 진행 여부를 선택해 주세요.';
+  const agentName = metadataString(reviewEvent?.metadata, 'agent_name')
+    ?? reviewEvent?.node_name
     ?? metadataString(run?.metadata, 'node')
     ?? 'Analysis Agent';
 
+  const approvalId = metadataString(reviewEvent?.metadata, 'approval_id')
+    ?? reviewEvent?.approval_id
+    ?? metadataString(run?.metadata, 'approval_id');
+  if (!approvalId) return null;
+
+  const rawOptions = reviewRequest?.options;
+  const options = Array.isArray(rawOptions)
+    ? rawOptions.flatMap((option) => {
+        if (!option || typeof option !== 'object' || Array.isArray(option)) return [];
+        const record = option as Record<string, unknown>;
+        const id = typeof record.id === 'string' ? record.id.trim() : '';
+        const label = typeof record.label === 'string' ? record.label.trim() : '';
+        if (!id || !label) return [];
+        return [{
+          id,
+          label,
+          recommended: record.recommended === true,
+        }];
+      })
+    : [];
+  const eventId = reviewEvent?.event_id ?? null;
+
   return {
-    eventId: reviewEvent.event_id ?? null,
-    agentName,
+    eventId,
+    requestKey: eventId ?? `${run?.run_id ?? 'run'}:analysis_review:${approvalId}`,
     approvalId,
-    question: (typeof request.question === 'string' && request.question) || reviewEvent.message,
-    proposal: typeof request.proposal === 'string' ? request.proposal : '',
-    rationale: Array.isArray(request.rationale)
-      ? request.rationale.filter((item): item is string => typeof item === 'string')
-      : [],
+    agentName,
+    content,
     options,
-    recommendedOptionId: typeof request.recommended_option_id === 'string' ? request.recommended_option_id : '',
-    allowFreeText: request.allow_free_text !== false,
-    freeTextPrompt: typeof request.free_text_prompt === 'string' && request.free_text_prompt
-      ? request.free_text_prompt
-      : '다른 분석 방향을 입력해 주세요.',
+    allowFreeText: reviewRequest?.allow_free_text !== false,
   };
 }
 
@@ -336,6 +458,10 @@ export function PlaygroundCanvas({
   isLeavingForSessions,
   isEnteringFromSessions,
 }: PlaygroundCanvasProps) {
+  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const reactFlowInstanceRef = useRef<
+    ReactFlowInstance<Node<PlaygroundNodeData>, Edge> | null
+  >(null);
   const initialGraph = useMemo(
     () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
     [],
@@ -346,6 +472,11 @@ export function PlaygroundCanvas({
   );
   const [nodes, setNodes] = useNodesState(initialStoredGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialStoredGraph.edges);
+  const [activeFlowTarget, setActiveFlowTarget] = useState<ActiveFlowTarget | null>(() => {
+    const runId = getStoredActiveRunId();
+    return runId ? { nodeId: null, runId } : null;
+  });
+  const [hoveredFlowNodeId, setHoveredFlowNodeId] = useState<string | null>(null);
   const [selectedNodeSummary, setSelectedNodeSummary] = useState<SelectedNodeSummary | null>(null);
   const [nodeSummaryRequest, setNodeSummaryRequest] = useState<NodeSummaryRequest>({
     data: null,
@@ -357,9 +488,9 @@ export function PlaygroundCanvas({
     error: null,
     isLoading: false,
   });
-  const [pendingReportConfirmation, setPendingReportConfirmation] = useState<PendingReportConfirmation | null>(null);
   const reportRequestSequence = useRef(0);
   const hydratedSummaryNodes = useRef(new Set<string>());
+  const hasReconciledEventGraph = useRef(false);
   const draggedNodeId = useRef<string | null>(null);
   const dragStartPositions = useRef(new Map<string, { x: number; y: number }>());
   const followTargets = useRef(new Map<string, { x: number; y: number }>());
@@ -379,24 +510,32 @@ export function PlaygroundCanvas({
   const [approvalError, setApprovalError] = useState<string | null>(null);
   const [isSubmittingAnalysisReview, setIsSubmittingAnalysisReview] = useState(false);
   const [analysisReviewError, setAnalysisReviewError] = useState<string | null>(null);
+  const [dismissedClarificationKey, setDismissedClarificationKey] = useState<string | null>(null);
+  const [dismissedApprovalKey, setDismissedApprovalKey] = useState<string | null>(null);
+  const [dismissedAnalysisReviewKey, setDismissedAnalysisReviewKey] = useState<string | null>(null);
   const { run, events, error: runStreamError } = useAgentRunStream(activeRunId);
   const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
 
   const handleDeleteRunStable = useCallback(async (runId: string, label: string) => {
     const shouldDelete = window.confirm(
-      `${label} 노드가 속한 분기 run 전체를 삭제할까요?\n\nrun_id: ${runId}`,
+      `${label} 노드가 속한 실행과 하위 분기 데이터를 모두 삭제할까요?\n\nrun_id: ${runId}`,
     );
     if (!shouldDelete) return;
 
     try {
       await deleteAgentRun(runId);
-      const fallbackRunId = visibleEvents.find((event) => event.run_id !== runId)?.run_id ?? null;
-      setVisibleEvents((currentEvents) => currentEvents.filter((event) => event.run_id !== runId));
+      const sessionId = getCurrentSessionId();
+      const remainingEvents = sessionId
+        ? await listAgentSessionEvents(sessionId)
+        : visibleEvents.filter((event) => event.run_id !== runId);
+      const remainingRunIds = new Set(remainingEvents.map((event) => event.run_id));
+      const fallbackRunId = remainingEvents[0]?.run_id ?? null;
+      setVisibleEvents(remainingEvents);
       setSelectedNodeSummary((selected) => (
-        selected?.runId === runId ? null : selected
+        selected?.runId && !remainingRunIds.has(selected.runId) ? null : selected
       ));
 
-      if (activeRunId === runId) {
+      if (activeRunId && !remainingRunIds.has(activeRunId)) {
         setActiveRunId(fallbackRunId);
         if (fallbackRunId) {
           setStoredActiveRunId(fallbackRunId);
@@ -404,6 +543,11 @@ export function PlaygroundCanvas({
           clearStoredActiveRunId();
         }
       }
+      setActiveFlowTarget((current) => (
+        current?.runId && !remainingRunIds.has(current.runId)
+          ? (fallbackRunId ? { nodeId: null, runId: fallbackRunId } : null)
+          : current
+      ));
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -447,6 +591,7 @@ export function PlaygroundCanvas({
     if (runStreamError && !run) {
       clearStoredActiveRunId();
       setActiveRunId(null);
+      setActiveFlowTarget(null);
     }
   }, [runStreamError, run]);
 
@@ -461,10 +606,25 @@ export function PlaygroundCanvas({
     ),
   );
   const isGenerating = isStartingRun || isRunActive;
-  const clarification = useMemo(() => getClarification(run, visibleEvents), [visibleEvents, run]);
-  const approval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
-  const analysisReview = useMemo(() => getAnalysisReview(run, visibleEvents), [visibleEvents, run]);
-  const hasDeletableNodes = nodes.some((node) => node.id !== 'datasource');
+  const detectedClarification = useMemo(
+    () => getClarification(run, visibleEvents),
+    [visibleEvents, run],
+  );
+  const detectedApproval = useMemo(() => getApproval(run, visibleEvents), [visibleEvents, run]);
+  const detectedAnalysisReview = useMemo(
+    () => getAnalysisReview(run, visibleEvents),
+    [visibleEvents, run],
+  );
+  const clarification = detectedClarification?.requestKey === dismissedClarificationKey
+    ? null
+    : detectedClarification;
+  const approval = detectedApproval?.requestKey === dismissedApprovalKey
+    ? null
+    : detectedApproval;
+  const analysisReview = detectedAnalysisReview?.requestKey === dismissedAnalysisReviewKey
+    ? null
+    : detectedAnalysisReview;
+  const hasDeletableNodes = nodes.length > 0;
 
   const startDescendantFollow = () => {
     if (followAnimationFrame.current !== null) return;
@@ -603,16 +763,34 @@ export function PlaygroundCanvas({
       && Math.abs(alignmentDeltaY) >= 0.5
     );
 
-    const targetPositions = hasCrossedParentBoundary
-      ? originalPositions
-      : shouldAlignVertically
-        ? new Map(
-          [...translatedPositions].map(([nodeId, position]) => [
-            nodeId,
-            { x: position.x, y: position.y + alignmentDeltaY },
-          ]),
+    const proposedTargetPositions = shouldAlignVertically
+      ? new Map(
+        [...translatedPositions].map(([nodeId, position]) => [
+          nodeId,
+          { x: position.x, y: position.y + alignmentDeltaY },
+        ]),
+      )
+      : translatedPositions;
+    const movingNodesById = new Map(
+      nodes
+        .filter((node) => movingIds.has(node.id))
+        .map((node) => [node.id, node]),
+    );
+    const stationaryNodes = nodes.filter((node) => !movingIds.has(node.id));
+    const hasNodeCollision = [...movingNodesById].some(([nodeId, movingNode]) => {
+      const movingPosition = proposedTargetPositions.get(nodeId);
+      if (!movingPosition) return false;
+      const movingBounds = getNodeCollisionBounds(movingNode, movingPosition);
+      return stationaryNodes.some((stationaryNode) => (
+        boundsOverlap(
+          movingBounds,
+          getNodeCollisionBounds(stationaryNode, stationaryNode.position),
         )
-        : translatedPositions;
+      ));
+    });
+    const targetPositions = hasCrossedParentBoundary || hasNodeCollision
+      ? originalPositions
+      : proposedTargetPositions;
     const animationStartedAt = performance.now();
 
     const animateAlignment = (now: number) => {
@@ -654,55 +832,215 @@ export function PlaygroundCanvas({
   useEffect(() => {
     setIsSubmittingClarification(false);
     setClarificationError(null);
-  }, [clarification?.eventId]);
+  }, [clarification?.requestKey]);
 
   useEffect(() => {
     setIsSubmittingApproval(false);
     setApprovalError(null);
-  }, [approval?.eventId]);
+  }, [approval?.requestKey]);
 
   useEffect(() => {
     setIsSubmittingAnalysisReview(false);
     setAnalysisReviewError(null);
-  }, [analysisReview?.eventId]);
+  }, [analysisReview?.requestKey]);
 
   useEffect(() => {
-    if (activeRunId && !run && !runStreamError && visibleEvents.length === 0) return;
-
-    const nextGraph = deriveNodeGraphFromEvents(visibleEvents, playgroundNodes, playgroundEdges);
+    const activeRunOriginalQuery = run?.run_id === activeRunId
+      && typeof run.metadata?.query === 'string'
+      ? run.metadata.query.trim()
+      : '';
+    const nextGraph = deriveNodeGraphFromEvents(
+      visibleEvents,
+      playgroundNodes,
+      playgroundEdges,
+      activeRunId,
+    );
+    const shouldAnimateNewEdges = hasReconciledEventGraph.current;
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
       const currentNodesById = new Map(currentNodes.map((node) => [node.id, node]));
+      const positionedNodesById = new Map(currentNodesById);
+      const queryByRunId = new Map<string, { label: string; text: string }>();
+      const firstNodeIdByRunId = new Map<string, string>();
+      const firstAgentNodeIdByRunId = new Map<string, string>();
+
+      for (const node of [...currentNodes, ...nextGraph.nodes]) {
+        const runId = node.data.runId;
+        if (!runId) continue;
+
+        if (!firstNodeIdByRunId.has(runId)) {
+          firstNodeIdByRunId.set(runId, node.id);
+        }
+        if (node.data.agentName !== 'supervisor' && !firstAgentNodeIdByRunId.has(runId)) {
+          firstAgentNodeIdByRunId.set(runId, node.id);
+        }
+        if (node.data.queryLabel && node.data.queryText && !queryByRunId.has(runId)) {
+          queryByRunId.set(runId, {
+            label: node.data.queryLabel,
+            text: node.data.queryText,
+          });
+        }
+      }
+
+      if (activeRunId && activeRunOriginalQuery) {
+        const runIdByNodeId = new Map(
+          nextGraph.nodes
+            .filter((node) => Boolean(node.data.runId))
+            .map((node) => [node.id, node.data.runId!] as const),
+        );
+        const parentRunIdByRunId = new Map<string, string>();
+        for (const edge of nextGraph.edges) {
+          const parentRunId = runIdByNodeId.get(edge.source);
+          const childRunId = runIdByNodeId.get(edge.target);
+          if (parentRunId && childRunId && parentRunId !== childRunId) {
+            parentRunIdByRunId.set(childRunId, parentRunId);
+          }
+        }
+
+        let rootRunId = activeRunId;
+        const visitedRunIds = new Set<string>();
+        while (parentRunIdByRunId.has(rootRunId) && !visitedRunIds.has(rootRunId)) {
+          visitedRunIds.add(rootRunId);
+          rootRunId = parentRunIdByRunId.get(rootRunId)!;
+        }
+        if (!queryByRunId.has(rootRunId)) {
+          queryByRunId.set(rootRunId, {
+            label: '원본 쿼리',
+            text: activeRunOriginalQuery,
+          });
+        }
+      }
 
       const eventNodes = nextGraph.nodes.map((node) => {
         const currentNode = currentNodesById.get(node.id);
-        const data = { ...node.data, onDeleteRun: handleDeleteRunStable };
+        const runId = node.data.runId;
+        const queryTargetNodeId = runId
+          ? firstAgentNodeIdByRunId.get(runId) ?? firstNodeIdByRunId.get(runId)
+          : null;
+        const inheritedQuery = runId && queryTargetNodeId === node.id
+          ? queryByRunId.get(runId)
+          : null;
+        const data = {
+          ...node.data,
+          queryLabel: node.data.queryLabel ?? inheritedQuery?.label,
+          queryText: node.data.queryText ?? inheritedQuery?.text,
+          onDeleteRun: handleDeleteRunStable,
+        };
+        const parentNode = data.parentNodeId
+          ? positionedNodesById.get(data.parentNodeId)
+          : null;
+        const position = currentNode?.position ?? {
+          ...node.position,
+          x: parentNode
+            ? Math.max(node.position.x, parentNode.position.x + NODE_CREATION_X_GAP)
+            : node.position.x,
+          y: parentNode && parentNode.data.runId === data.runId
+            ? parentNode.position.y
+            : node.position.y,
+        };
+        const positionedNode = {
+          ...node,
+          position,
+          data,
+        };
+        positionedNodesById.set(node.id, positionedNode);
+        return positionedNode;
+      });
+
+      const eventNodeById = new Map(eventNodes.map((node) => [node.id, node]));
+      const latestNodeIdByRunId = new Map<string, string>();
+
+      for (const node of eventNodes) {
+        const runId = node.data.runId;
+        if (!runId) continue;
+        if (node.data.queryLabel && node.data.queryText && !queryByRunId.has(runId)) {
+          queryByRunId.set(runId, {
+            label: node.data.queryLabel,
+            text: node.data.queryText,
+          });
+        }
+        const latestNodeId = latestNodeIdByRunId.get(runId);
+        const latestNode = latestNodeId ? eventNodeById.get(latestNodeId) : null;
+        if (!latestNode || (node.data.nodeSequence ?? 0) >= (latestNode.data.nodeSequence ?? 0)) {
+          latestNodeIdByRunId.set(runId, node.id);
+        }
+      }
+
+      const branchBadgesByParentId = new Map<string, PlaygroundNodeQuery[]>();
+      for (const edge of nextGraph.edges) {
+        const parentNode = eventNodeById.get(edge.source);
+        const branchNode = eventNodeById.get(edge.target);
+        const branchRunId = branchNode?.data.runId;
+        if (!parentNode || !branchNode || !branchRunId || parentNode.data.runId === branchRunId) {
+          continue;
+        }
+
+        const branchQuery = queryByRunId.get(branchRunId);
+        if (!branchQuery) continue;
+        const badges = branchBadgesByParentId.get(parentNode.id) ?? [];
+        badges.push({
+          ...branchQuery,
+          flowNodeId: latestNodeIdByRunId.get(branchRunId) ?? branchNode.id,
+        });
+        branchBadgesByParentId.set(parentNode.id, badges);
+      }
+
+      const eventNodesWithQueryBadges = eventNodes.map((node) => {
+        const runId = node.data.runId;
+        const ownQuery = runId ? queryByRunId.get(runId) : null;
+        const queryBadges = [
+          ...(ownQuery ? [{
+            ...ownQuery,
+            flowNodeId: latestNodeIdByRunId.get(runId!) ?? node.id,
+          }] : []),
+          ...(branchBadgesByParentId.get(node.id) ?? []),
+        ].filter((query, index, all) => (
+          all.findIndex((candidate) => (
+            candidate.label === query.label
+            && candidate.text === query.text
+            && candidate.flowNodeId === query.flowNodeId
+          )) === index
+        ));
+
         return {
           ...node,
-          position: currentNode?.position ?? node.position,
-          data,
+          data: {
+            ...node.data,
+            queryBadges,
+            onFlowHover: setHoveredFlowNodeId,
+          },
         };
       });
 
-      return [...eventNodes, ...manualNodes];
+      return [...eventNodesWithQueryBadges, ...manualNodes];
     });
     setEdges((currentEdges) => {
       const currentEdgesById = new Map(currentEdges.map((edge) => [edge.id, edge]));
       const manualEdges = currentEdges.filter((edge) => edge.id.startsWith('manual-edge-'));
       const eventEdges = nextGraph.edges.map((edge) => {
         const currentEdge = currentEdgesById.get(edge.id);
-        if (!currentEdge) return edge;
+        if (!currentEdge) {
+          return {
+            ...edge,
+            data: {
+              ...edge.data,
+              // Restored history is already complete; only subsequently added edges draw in.
+              animateOnCreate: shouldAnimateNewEdges,
+            },
+          };
+        }
 
         const data = { ...currentEdge.data, ...edge.data };
         return {
           ...edge,
           data,
-          zIndex: data.flowState === 'active' ? 10 : 0,
+          zIndex: 0,
         };
       });
 
       return [...eventEdges, ...manualEdges];
     });
+    hasReconciledEventGraph.current = true;
 
     for (const node of nextGraph.nodes) {
       if (node.data.status !== 'success' || !node.data.runId) continue;
@@ -724,7 +1062,60 @@ export function PlaygroundCanvas({
           hydratedSummaryNodes.current.delete(hydrationKey);
         });
     }
-  }, [activeRunId, handleDeleteRunStable, visibleEvents, setEdges, setNodes]);
+  }, [activeRunId, handleDeleteRunStable, run, visibleEvents, setEdges, setNodes]);
+
+  const nodeActivationKey = nodes
+    .map((node) => `${node.id}:${node.data.status}:${node.selected ? 'selected' : 'idle'}`)
+    .join('|');
+  const edgeTopologyKey = edges
+    .map((edge) => `${edge.id}:${edge.source}:${edge.target}`)
+    .join('|');
+
+  useEffect(() => {
+    const persistentTargetNodeIds = activeFlowTarget?.nodeId
+      ? nodes.some((node) => node.id === activeFlowTarget.nodeId)
+        ? [activeFlowTarget.nodeId]
+        : []
+      : activeFlowTarget?.runId
+        ? (() => {
+          const flowNodes = nodes.filter((node) => node.data.runId === activeFlowTarget.runId);
+          const latestFlowNode = flowNodes.reduce<Node<PlaygroundNodeData> | null>(
+            (latest, node) => (
+              !latest || (node.data.nodeSequence ?? 0) >= (latest.data.nodeSequence ?? 0)
+                ? node
+                : latest
+            ),
+            null,
+          );
+          return latestFlowNode ? [latestFlowNode.id] : [];
+        })()
+      : nodes.filter((node) => node.selected).map((node) => node.id);
+
+    // A query badge previews another flow without replacing the user's active flow.
+    const targetNodeIds = hoveredFlowNodeId && nodes.some((node) => node.id === hoveredFlowNodeId)
+      ? [...new Set([...persistentTargetNodeIds, hoveredFlowNodeId])]
+      : persistentTargetNodeIds;
+
+    setEdges((currentEdges) => {
+      const activeEdgeIds = getAncestorEdgeIds(currentEdges, targetNodeIds);
+      let changed = false;
+      const nextEdges = currentEdges.map((edge) => {
+        const shouldBeActive = activeEdgeIds.has(edge.id);
+        const isActive = edge.data?.flowState === 'active';
+        if (shouldBeActive === isActive) return edge;
+        changed = true;
+        return {
+          ...edge,
+          zIndex: 0,
+          data: {
+            ...edge.data,
+            flowState: shouldBeActive ? 'active' : 'idle',
+          },
+        };
+      });
+      return changed ? nextEdges : currentEdges;
+    });
+  }, [activeFlowTarget, edgeTopologyKey, hoveredFlowNodeId, nodeActivationKey, nodes, setEdges]);
 
   useEffect(() => {
     setSelectedNodeSummary((selected) => {
@@ -737,6 +1128,7 @@ export function PlaygroundCanvas({
         label: currentNode.data.label,
         kind: currentNode.data.kind,
         status: currentNode.data.status,
+        parentNodeId: currentNode.data.parentNodeId ?? null,
       };
     });
   }, [nodes]);
@@ -779,7 +1171,6 @@ export function PlaygroundCanvas({
   useEffect(() => {
     reportRequestSequence.current += 1;
     setNodeReportRequest({ data: null, error: null, isLoading: false });
-    setPendingReportConfirmation(null);
     if (mode === 'report') setSelectedNodeSummary(null);
   }, [mode]);
 
@@ -797,10 +1188,53 @@ export function PlaygroundCanvas({
     setActiveRunId(null);
     setSelectedNodeSummary(null);
 
+    const canvasBounds = canvasRef.current?.getBoundingClientRect();
+    const viewportCenter = canvasBounds && reactFlowInstanceRef.current
+      ? reactFlowInstanceRef.current.screenToFlowPosition({
+          x: canvasBounds.left + canvasBounds.width / 2,
+          y: canvasBounds.top + canvasBounds.height / 2,
+        })
+      : { x: 0, y: 120 };
+    const initialNodePosition = getNewPromptNodePosition(nodes, viewportCenter);
+
     try {
       const run = await createAgentRun(sessionId, prompt);
+      const initialNodeId = `${run.run_id}:node:1`;
+      setNodes((currentNodes) => [
+        ...currentNodes.filter((node) => node.id !== initialNodeId),
+        {
+          id: initialNodeId,
+          type: 'playground',
+          position: initialNodePosition,
+          data: {
+            label: 'Agent 선택 중',
+            description: '분석 계획과 현재 근거를 검토하고 있습니다.',
+            kind: 'supervisor',
+            status: 'selecting',
+            eventType: 'supervisor.selection.started',
+            lastMessage: '다음 Agent를 선택하고 있습니다.',
+            runId: run.run_id,
+            nodeSequence: 1,
+            parentNodeId: null,
+            agentName: 'supervisor',
+            queryLabel: '원본 쿼리',
+            queryText: prompt,
+          },
+        },
+      ]);
       setActiveRunId(run.run_id);
       setStoredActiveRunId(run.run_id);
+      setActiveFlowTarget({ nodeId: null, runId: run.run_id });
+
+      const instance = reactFlowInstanceRef.current;
+      if (instance) {
+        const { zoom } = instance.getViewport();
+        void instance.setCenter(
+          initialNodePosition.x + INITIAL_NODE_WIDTH / 2,
+          initialNodePosition.y + INITIAL_NODE_HEIGHT / 2,
+          { zoom, duration: 520 },
+        );
+      }
     } catch (error) {
       console.error('Agent run failed:', error);
     } finally {
@@ -832,6 +1266,8 @@ export function PlaygroundCanvas({
     setClarificationError(null);
     try {
       await resumeAgentRun(activeRunId, answer);
+      setDismissedClarificationKey(clarification.requestKey);
+      setIsSubmittingClarification(false);
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -849,6 +1285,8 @@ export function PlaygroundCanvas({
     setApprovalError(null);
     try {
       await resumeAgentRunApproval(activeRunId, approved);
+      setDismissedApprovalKey(approval.requestKey);
+      setIsSubmittingApproval(false);
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -859,20 +1297,25 @@ export function PlaygroundCanvas({
     }
   };
 
-  const handleAnalysisReviewDecision = async (decision: { selectedOptionId?: string; freeText?: string }) => {
+  const handleAnalysisReviewDecision = async (
+    selection: { selectedOptionId?: string; freeText?: string },
+  ) => {
     if (!activeRunId || !analysisReview || isSubmittingAnalysisReview) return;
 
     setIsSubmittingAnalysisReview(true);
     setAnalysisReviewError(null);
     try {
-      await resumeAnalysisReview(activeRunId, {
-        approvalId: analysisReview.approvalId,
-        ...decision,
-      });
+      await resumeAgentRunAnalysisReview(
+        activeRunId,
+        analysisReview.approvalId,
+        selection,
+      );
+      setDismissedAnalysisReviewKey(analysisReview.requestKey);
+      setIsSubmittingAnalysisReview(false);
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
-        : '분석 검토 결과를 전송하지 못했습니다. 다시 시도해 주세요.';
+        : '분석 검토 응답을 전송하지 못했습니다. 다시 시도해 주세요.';
       setAnalysisReviewError(message);
       setIsSubmittingAnalysisReview(false);
       throw error;
@@ -882,27 +1325,36 @@ export function PlaygroundCanvas({
   const handleCreateNode = (kind: CreatableNodeKind) => {
     const selectedNode = nodes.find((node) => node.selected);
     const nodeId = `manual-${crypto.randomUUID()}`;
+    const existingChildCount = selectedNode
+      ? edges.filter((edge) => edge.source === selectedNode.id).length
+      : 0;
 
     setNodes((currentNodes) => {
       const manualNodeCount = currentNodes.filter((node) => node.id.startsWith('manual-')).length;
       const column = manualNodeCount % 3;
       const row = Math.floor(manualNodeCount / 3);
+      const nextPosition = selectedNode
+        ? {
+            x: selectedNode.position.x + NODE_CREATION_X_GAP,
+            y: selectedNode.position.y
+              + (existingChildCount > 0 ? existingChildCount * NODE_CREATION_BRANCH_Y_GAP : 0),
+          }
+        : { x: 280 + column * 384, y: 320 + row * 200 };
 
       return [
-        ...currentNodes,
+        ...currentNodes.map((node) => (
+          node.selected ? { ...node, selected: false } : node
+        )),
         {
           id: nodeId,
           type: 'playground',
-          position: selectedNode
-            ? {
-                x: selectedNode.position.x + 460,
-                y: selectedNode.position.y,
-              }
-            : { x: 280 + column * 384, y: 320 + row * 200 },
+          position: nextPosition,
+          selected: true,
           data: {
             ...NODE_DEFAULTS[kind],
             kind,
             status: 'idle',
+            parentNodeId: selectedNode?.id ?? null,
           },
         },
       ];
@@ -922,42 +1374,11 @@ export function PlaygroundCanvas({
     }
   };
 
-  const handleEdgeClick = (_event: ReactMouseEvent, clickedEdge: Edge) => {
-    setEdges((currentEdges) => currentEdges.map((edge) => {
-      if (edge.id !== clickedEdge.id) return edge;
-
-      const isActive = edge.data?.flowState === 'active';
-      return {
-        ...edge,
-        zIndex: isActive ? 0 : 10,
-        data: {
-          ...edge.data,
-          flowState: isActive ? 'idle' : 'active',
-        },
-      };
-    }));
-  };
-
-  const runReportGeneration = (runId: string, nodeId: string) => {
-    const requestSequence = reportRequestSequence.current + 1;
-    reportRequestSequence.current = requestSequence;
-    setNodeReportRequest({ data: null, error: null, isLoading: true });
-    void createAgentNodeReport(runId, nodeId)
-      .then((response) => {
-        if (reportRequestSequence.current !== requestSequence) return;
-        setNodeReportRequest({ data: response, error: null, isLoading: false });
-        notifyReportsUpdated();
-      })
-      .catch((error: unknown) => {
-        if (reportRequestSequence.current !== requestSequence) return;
-        const message = error instanceof BackendApiError
-          ? error.message
-          : '리포트를 생성하지 못했습니다.';
-        setNodeReportRequest({ data: null, error: message, isLoading: false });
-      });
-  };
-
   const handleNodeClick = (_event: ReactMouseEvent, node: Node<PlaygroundNodeData>) => {
+    if (node.data.status === 'selecting') return;
+
+    setActiveFlowTarget({ nodeId: node.id, runId: node.data.runId ?? null });
+
     if (mode === 'report') {
       setSelectedNodeSummary(null);
       if (node.data.kind !== 'insight-agent' || node.data.status !== 'success' || !node.data.runId) {
@@ -969,7 +1390,22 @@ export function PlaygroundCanvas({
         return;
       }
 
-      setPendingReportConfirmation({ runId: node.data.runId, nodeId: node.id, label: node.data.label });
+      const requestSequence = reportRequestSequence.current + 1;
+      reportRequestSequence.current = requestSequence;
+      setNodeReportRequest({ data: null, error: null, isLoading: true });
+      void createAgentNodeReport(node.data.runId, node.id)
+        .then((response) => {
+          if (reportRequestSequence.current !== requestSequence) return;
+          setNodeReportRequest({ data: response, error: null, isLoading: false });
+          notifyReportsUpdated();
+        })
+        .catch((error: unknown) => {
+          if (reportRequestSequence.current !== requestSequence) return;
+          const message = error instanceof BackendApiError
+            ? error.message
+            : '리포트를 생성하지 못했습니다.';
+          setNodeReportRequest({ data: null, error: message, isLoading: false });
+        });
       return;
     }
 
@@ -980,18 +1416,8 @@ export function PlaygroundCanvas({
       label: node.data.label,
       kind: node.data.kind,
       status: node.data.status,
+      parentNodeId: node.data.parentNodeId ?? null,
     });
-  };
-
-  const handleConfirmReportGeneration = () => {
-    if (!pendingReportConfirmation) return;
-    const { runId, nodeId } = pendingReportConfirmation;
-    setPendingReportConfirmation(null);
-    runReportGeneration(runId, nodeId);
-  };
-
-  const handleCancelReportGeneration = () => {
-    setPendingReportConfirmation(null);
   };
 
   const handleBranchPromptSend = async (prompt: string) => {
@@ -1004,9 +1430,15 @@ export function PlaygroundCanvas({
 
     setIsStartingRun(true);
     try {
-      const branchRun = await branchAgentRun(branchSourceRunId, startStage, prompt, selectedNodeSummary.id);
+      const branchRun = await branchAgentRun(
+        branchSourceRunId,
+        startStage,
+        prompt,
+        selectedNodeSummary.parentNodeId,
+      );
       setActiveRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
+      setActiveFlowTarget({ nodeId: null, runId: branchRun.run_id });
       setSelectedNodeSummary(null);
     } catch (error) {
       console.error('Branch run failed:', error);
@@ -1026,10 +1458,16 @@ export function PlaygroundCanvas({
     setIsDeletingNodes(true);
     setDeleteNodesError(null);
     try {
-      if (activeRunId) await deleteAgentRun(activeRunId);
+      const sessionId = getCurrentSessionId();
+      if (sessionId) {
+        await deleteAgentSessionRuns(sessionId);
+      } else if (activeRunId) {
+        await deleteAgentRun(activeRunId);
+      }
       clearStoredActiveRunId();
       clearStoredPlaygroundGraph();
       setActiveRunId(null);
+      setActiveFlowTarget(null);
       setVisibleEvents([]);
       setSelectedNodeSummary(null);
       setNodeReportRequest({ data: null, error: null, isLoading: false });
@@ -1054,6 +1492,7 @@ export function PlaygroundCanvas({
 
   return (
     <div
+      ref={canvasRef}
       className={`${styles.canvas} ${
         isLeavingForSessions ? styles.canvasLeavingForSessions : ''
       } ${isEnteringFromSessions ? styles.canvasEnteringFromSessions : ''}`}
@@ -1070,8 +1509,10 @@ export function PlaygroundCanvas({
           onNodeDragStop={handleNodeDragStop}
           onEdgesChange={onEdgesChange}
           onNodeClick={handleNodeClick}
-          onEdgeClick={handleEdgeClick}
           onPaneClick={handlePaneClick}
+          onInit={(instance) => {
+            reactFlowInstanceRef.current = instance;
+          }}
           selectNodesOnDrag={false}
           fitView
         >
@@ -1087,6 +1528,9 @@ export function PlaygroundCanvas({
         onPromptSend={handlePromptSend}
         clarification={clarification}
         analysisReview={analysisReview}
+        isSubmittingAnalysisReview={isSubmittingAnalysisReview}
+        analysisReviewError={analysisReviewError}
+        onAnalysisReviewDecision={handleAnalysisReviewDecision}
         isSubmittingClarification={isSubmittingClarification}
         clarificationError={clarificationError}
         onClarificationSend={handleClarificationSend}
@@ -1094,9 +1538,6 @@ export function PlaygroundCanvas({
         isSubmittingApproval={isSubmittingApproval}
         approvalError={approvalError}
         onApprovalDecision={handleApprovalDecision}
-        isSubmittingAnalysisReview={isSubmittingAnalysisReview}
-        analysisReviewError={analysisReviewError}
-        onAnalysisReviewDecision={handleAnalysisReviewDecision}
         nodeSummary={selectedNodeSummary}
         nodeSummaryData={nodeSummaryRequest.data}
         nodeSummaryRunId={selectedNodeSummary?.runId ?? activeRunId}
@@ -1110,9 +1551,6 @@ export function PlaygroundCanvas({
           reportRequestSequence.current += 1;
           setNodeReportRequest({ data: null, error: null, isLoading: false });
         }}
-        pendingReportConfirmation={pendingReportConfirmation}
-        onConfirmReportGeneration={handleConfirmReportGeneration}
-        onCancelReportGeneration={handleCancelReportGeneration}
         onBranchPromptSend={handleBranchPromptSend}
         canDeleteAllNodes={hasDeletableNodes && !isGenerating && !isDeletingNodes}
         isDeletingAllNodes={isDeletingNodes}

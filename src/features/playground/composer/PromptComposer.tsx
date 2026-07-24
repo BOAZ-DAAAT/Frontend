@@ -1,19 +1,9 @@
-import { MessageCircleQuestion, Square } from 'lucide-react';
-import { useEffect } from 'react';
+import { Check, MessageCircleQuestion, Square } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 
 import styles from './PromptComposer.module.css';
-
-interface AnalysisReviewOption {
-  id: string;
-  label: string;
-  method: string;
-  advantages: string[];
-  limitations: string[];
-  impact: string;
-  recommended: boolean;
-}
 
 interface PromptComposerProps {
   isGenerating: boolean;
@@ -24,35 +14,40 @@ interface PromptComposerProps {
   onSend: (prompt: string) => Promise<void>;
   clarification: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     question: string;
   } | null;
   analysisReview: {
     eventId: string | null;
-    agentName: string;
+    requestKey: string;
     approvalId: string;
-    question: string;
-    proposal: string;
-    rationale: string[];
-    options: AnalysisReviewOption[];
-    recommendedOptionId: string;
+    agentName: string;
+    content: string;
+    options: Array<{
+      id: string;
+      label: string;
+      recommended: boolean;
+    }>;
     allowFreeText: boolean;
-    freeTextPrompt: string;
   } | null;
+  isSubmittingAnalysisReview: boolean;
+  analysisReviewError: string | null;
+  onAnalysisReviewDecision: (
+    selection: { selectedOptionId?: string; freeText?: string },
+  ) => Promise<void>;
   isSubmittingClarification: boolean;
   clarificationError: string | null;
   onClarificationSend: (answer: string) => Promise<void>;
   approval: {
     eventId: string | null;
+    requestKey: string;
     agentName: string;
     reason: string;
   } | null;
   isSubmittingApproval: boolean;
   approvalError: string | null;
   onApprovalDecision: (approved: boolean) => Promise<void>;
-  isSubmittingAnalysisReview: boolean;
-  analysisReviewError: string | null;
-  onAnalysisReviewDecision: (decision: { selectedOptionId?: string; freeText?: string }) => Promise<void>;
 }
 
 // TODO: 실제 SVG로 교체 예정.
@@ -88,6 +83,9 @@ export function PromptComposer({
   onSend,
   clarification,
   analysisReview,
+  isSubmittingAnalysisReview,
+  analysisReviewError,
+  onAnalysisReviewDecision,
   isSubmittingClarification,
   clarificationError,
   onClarificationSend,
@@ -95,12 +93,9 @@ export function PromptComposer({
   isSubmittingApproval,
   approvalError,
   onApprovalDecision,
-  isSubmittingAnalysisReview,
-  analysisReviewError,
-  onAnalysisReviewDecision,
 }: PromptComposerProps) {
   const { ref, resize } = useAutoResizeTextarea(5);
-  const analysisReviewFreeTextEnabled = Boolean(analysisReview?.allowFreeText);
+  const [selectedReviewOptionId, setSelectedReviewOptionId] = useState<string | null>(null);
   const showStopButton = (
     isGenerating
     && !clarification
@@ -109,32 +104,26 @@ export function PromptComposer({
   );
 
   useEffect(() => {
-    if (ref.current) ref.current.value = '';
-    resize();
-  }, [analysisReview?.eventId, ref, resize]);
+    setSelectedReviewOptionId(null);
+  }, [analysisReview?.requestKey]);
 
   const handleSend = async () => {
     const prompt = ref.current?.value.trim();
 
-    if (!prompt) return;
-
-    if (analysisReview) {
-      if (!analysisReviewFreeTextEnabled || isSubmittingAnalysisReview) return;
-      try {
-        await onAnalysisReviewDecision({ freeText: prompt });
-        if (ref.current) ref.current.value = '';
-        resize();
-      } catch {
-        // 부모가 오류를 표시하며, 입력값은 재시도를 위해 유지한다.
-      }
-      return;
-    }
-
-    if (isSubmittingClarification || approval || (isGenerating && !clarification)) return;
+    if (
+      !prompt
+      || isSubmittingClarification
+      || isSubmittingAnalysisReview
+      || approval
+      || (analysisReview && !analysisReview.allowFreeText)
+      || (isGenerating && !clarification && !analysisReview)
+    ) return;
 
     try {
       if (clarification) {
         await onClarificationSend(prompt);
+      } else if (analysisReview) {
+        await onAnalysisReviewDecision({ freeText: prompt });
       } else {
         await onSend(prompt);
       }
@@ -155,9 +144,14 @@ export function PromptComposer({
     void onApprovalDecision(false);
   };
 
-  const handleSelectReviewOption = (optionId: string) => {
+  const handleReviewOption = async (optionId: string) => {
     if (isSubmittingAnalysisReview) return;
-    void onAnalysisReviewDecision({ selectedOptionId: optionId });
+    setSelectedReviewOptionId(optionId);
+    try {
+      await onAnalysisReviewDecision({ selectedOptionId: optionId });
+    } catch {
+      setSelectedReviewOptionId(null);
+    }
   };
 
   const handlePrimaryAction = () => {
@@ -232,39 +226,25 @@ export function PromptComposer({
           <div className={styles.reviewMeta}>
             <span>{analysisReview.agentName}</span>
           </div>
-          {analysisReview.proposal ? (
-            <p className={styles.reviewProposal}>{analysisReview.proposal}</p>
-          ) : null}
-          <p className={styles.reviewQuestion}>{analysisReview.question}</p>
-
+          <p className={styles.reviewContent}>{analysisReview.content}</p>
           {analysisReviewError ? (
             <p id="analysis-review-error" className={styles.error} role="alert">
               {analysisReviewError}
             </p>
           ) : null}
-
-          <div className={styles.reviewOptionList}>
+          <div className={styles.reviewActions}>
             {analysisReview.options.map((option) => (
               <button
                 key={option.id}
                 type="button"
-                className={styles.reviewOption}
-                onClick={() => handleSelectReviewOption(option.id)}
+                className={`${styles.reviewButton} ${styles.reviewConfirm} ${selectedReviewOptionId === option.id ? styles.reviewButtonSelected : ''}`}
+                onClick={() => void handleReviewOption(option.id)}
                 disabled={isSubmittingAnalysisReview}
-                aria-busy={isSubmittingAnalysisReview}
+                aria-busy={isSubmittingAnalysisReview && selectedReviewOptionId === option.id}
+                aria-pressed={selectedReviewOptionId === option.id}
               >
-                <div className={styles.reviewOptionHeader}>
-                  <span>{option.label}</span>
-                  {option.recommended ? (
-                    <span className={styles.reviewOptionBadge}>추천</span>
-                  ) : null}
-                </div>
-                {option.method ? (
-                  <p className={styles.reviewOptionMeta}>{option.method}</p>
-                ) : null}
-                {option.impact ? (
-                  <p className={styles.reviewOptionMeta}>{option.impact}</p>
-                ) : null}
+                {option.recommended ? <Check aria-hidden /> : null}
+                {option.label}
               </button>
             ))}
           </div>
@@ -278,9 +258,9 @@ export function PromptComposer({
           onKeyDown={handleKeyDown}
           rows={1}
           placeholder={analysisReview
-            ? analysisReviewFreeTextEnabled
-              ? analysisReview.freeTextPrompt
-              : '위 옵션 중 하나를 선택해 주세요'
+            ? analysisReview.allowFreeText
+              ? '다른 분석 조건이나 의견을 입력해 주세요'
+              : '위 선택지로 응답해 주세요'
             : isSubmittingClarification
             ? '답변을 전송하고 있습니다'
             : approval
@@ -291,13 +271,16 @@ export function PromptComposer({
           className={`${styles.textarea} ${styles.input}`}
           disabled={
             isSubmittingClarification
+            || isSubmittingAnalysisReview
             || Boolean(approval)
-            || (Boolean(analysisReview) && (!analysisReviewFreeTextEnabled || isSubmittingAnalysisReview))
+            || Boolean(analysisReview && !analysisReview.allowFreeText)
           }
           aria-describedby={
             clarificationError
               ? 'clarification-error'
-              : stopError
+              : analysisReviewError
+                ? 'analysis-review-error'
+                : stopError
                 ? 'stop-error'
                 : undefined
           }
@@ -331,10 +314,11 @@ export function PromptComposer({
                 ? isStopping || !canStop
                 : isSubmittingClarification
                   || Boolean(approval)
-                  || (Boolean(analysisReview) && (!analysisReviewFreeTextEnabled || isSubmittingAnalysisReview))
+                  || isSubmittingAnalysisReview
+                  || Boolean(analysisReview && !analysisReview.allowFreeText)
                   || (isGenerating && !clarification && !analysisReview)
             }
-            aria-busy={isSubmittingClarification || isStopping || isSubmittingAnalysisReview}
+            aria-busy={isSubmittingClarification || isSubmittingAnalysisReview || isStopping}
           >
             {showStopButton
               ? <Square size={10} fill="currentColor" strokeWidth={0} aria-hidden />

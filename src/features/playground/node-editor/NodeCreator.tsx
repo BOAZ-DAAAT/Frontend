@@ -12,7 +12,7 @@ import type { PlaygroundNodeKind } from '../types';
 
 import styles from './NodeCreator.module.css';
 
-export type CreatableNodeKind = Exclude<PlaygroundNodeKind, 'datasource'>;
+export type CreatableNodeKind = Exclude<PlaygroundNodeKind, 'datasource' | 'supervisor'>;
 
 type NodeCreatorProps = {
   onCreate: (kind: CreatableNodeKind) => void;

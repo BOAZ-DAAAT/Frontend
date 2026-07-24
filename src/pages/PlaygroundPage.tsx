@@ -18,10 +18,40 @@ export function PlaygroundPage({ initialView = 'navigation' }: PlaygroundPagePro
   // 열려 있는 미리보기 대상 (null = 닫힘)
   const [preview, setPreview] = useState<{ sessionId: string; table: string } | null>(null);
   const [isLeavingForSessions, setIsLeavingForSessions] = useState(false);
-  const [isEnteringFromSessions] = useState(
+  const [isEnteringFromSessions, setIsEnteringFromSessions] = useState(
     () => initialView === 'navigation'
       && (location.state as { fromSessions?: boolean } | null)?.fromSessions === true,
   );
+
+  useEffect(() => {
+    if (!isEnteringFromSessions) return;
+
+    const clearEnteringState = () => {
+      setIsEnteringFromSessions(false);
+      navigate(
+        {
+          pathname: location.pathname,
+          search: location.search,
+          hash: location.hash,
+        },
+        { replace: true, state: null },
+      );
+    };
+
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      clearEnteringState();
+      return;
+    }
+
+    const enterTimer = window.setTimeout(clearEnteringState, 460);
+    return () => window.clearTimeout(enterTimer);
+  }, [
+    isEnteringFromSessions,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigate,
+  ]);
 
   useEffect(() => () => {
     if (leaveTimerRef.current !== null) {

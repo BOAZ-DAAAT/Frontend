@@ -7,6 +7,11 @@ import { getAgentRun, listAgentRunRelatedEvents } from './api';
 import { streamAgentRunEvents } from './eventStream';
 
 const RECONNECT_DELAY_MS = 1500;
+const TERMINAL_RUN_STATUSES = new Set<RunSummary['status']>([
+  'succeeded',
+  'failed',
+  'cancelled',
+]);
 
 type UseAgentRunStreamOptions = {
   enabled?: boolean;
@@ -28,11 +33,23 @@ function appendEvent(events: RunEvent[], nextEvent: RunEvent): RunEvent[] {
 }
 
 function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
+  if (event.event_type === 'run.completed') return 'succeeded';
+  if (event.event_type === 'run.failed') return 'failed';
   if (event.event_type === 'run.cancelled') return 'cancelled';
-  if (event.event_type === 'human_input.required') return 'waiting_input';
+  if (event.event_type === 'human_input.required') {
+    return event.metadata?.interrupt_type === 'approval'
+      ? 'waiting_approval'
+      : 'waiting_input';
+  }
   if (event.event_type === 'human_input.resumed') return 'running';
-  // analysis_agent가 human_review를 걸면 agent.waiting으로 승인 대기 상태가 됨(interrupt 아님).
-  // review_request가 채워져 있으면 뒤이어 human_input.required가 와서 waiting_input으로 정정된다.
+  if ([
+    'run.started',
+    'agent.started',
+    'agent.progress',
+    'agent.retrying',
+    'agent.resumed',
+    'agent.completed',
+  ].includes(event.event_type)) return 'running';
   if (event.event_type === 'agent.waiting') return 'waiting_approval';
   return null;
 }
@@ -74,7 +91,28 @@ export function useAgentRunStream(
         if (controller.signal.aborted) return;
         const sourceEvents = await listAgentRunRelatedEvents(runId);
         if (controller.signal.aborted) return;
-        setState({ run, events: sourceEvents, isStreaming: true, error: null });
+        const currentRunEvents = sourceEvents.filter((event) => event.run_id === runId);
+        lastEventId = currentRunEvents.at(-1)?.event_id;
+        const hydratedRun = currentRunEvents.reduce<RunSummary>((currentRun, event) => {
+          const eventStatus = statusFromEvent(event);
+          if (!eventStatus || TERMINAL_RUN_STATUSES.has(currentRun.status)) return currentRun;
+          return {
+            ...currentRun,
+            status: eventStatus,
+            metadata: {
+              ...currentRun.metadata,
+              ...event.metadata,
+            },
+          };
+        }, run);
+        const isTerminal = TERMINAL_RUN_STATUSES.has(hydratedRun.status);
+        setState({
+          run: hydratedRun,
+          events: sourceEvents,
+          isStreaming: !isTerminal,
+          error: null,
+        });
+        if (isTerminal) return;
 
         while (!controller.signal.aborted) {
           try {
@@ -89,7 +127,9 @@ export function useAgentRunStream(
                 const nextStatus = statusFromEvent(message.data);
                 setState((current) => ({
                   ...current,
-                  run: current.run && nextStatus
+                  run: current.run
+                    && nextStatus
+                    && !TERMINAL_RUN_STATUSES.has(current.run.status)
                     ? {
                         ...current.run,
                         status: nextStatus,

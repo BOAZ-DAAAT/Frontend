@@ -37,8 +37,8 @@
   border-radius: 0.75rem;
   background: rgb(255 255 255 / 30%);
   box-shadow: inset 0 0 10px rgb(255 255 255 / 25%), 0 8px 24px rgb(0 0 0 / 8%);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: var(--effect-surface-blur);
+  -webkit-backdrop-filter: var(--effect-surface-blur);
 }
 
 .option {
