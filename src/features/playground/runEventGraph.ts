@@ -77,6 +77,12 @@ function statusFromEvent(event: RunEvent): PlaygroundNodeStatus {
   return 'running';
 }
 
+function statusFromTerminalRunEvent(event: RunEvent): PlaygroundNodeStatus {
+  if (event.event_type === 'run.completed') return 'success';
+  if (event.event_type === 'run.cancelled') return 'cancelled';
+  return 'error';
+}
+
 function summaryFromEvent(event: RunEvent): string {
   const summary = event.metadata?.summary;
   if (summary && typeof summary === 'object' && 'summary' in summary) {
@@ -125,6 +131,7 @@ export function deriveNodeGraphFromEvents(
   const runtimeNodes = new Map<string, RuntimeNode>();
   const queryByRunId = new Map<string, { label: string; text: string }>();
   const runVisualState = new Map<string, RunVisualState>();
+  const terminalEventByRunId = new Map<string, RunEvent>();
   const latestAttemptByNodeId = new Map<string, number>();
   const runOrder: string[] = [];
   let nextNodeOrder = 0;
@@ -157,15 +164,7 @@ export function deriveNodeGraphFromEvents(
     }
     if (TERMINAL_RUN_EVENTS.has(event.event_type)) {
       visualState.terminal = true;
-      for (const [nodeId, node] of runtimeNodes) {
-        if (
-          node.data.runId === event.run_id
-          && node.data.agentName === 'supervisor'
-          && node.data.status === 'selecting'
-        ) {
-          runtimeNodes.delete(nodeId);
-        }
-      }
+      terminalEventByRunId.set(event.run_id, event);
     }
     const eventParentNodeId = metadataString(event, 'parent_node_id');
     if (
@@ -235,6 +234,32 @@ export function deriveNodeGraphFromEvents(
         firstSeenOrder,
       },
     });
+  }
+
+  for (const [runId, terminalEvent] of terminalEventByRunId) {
+    const terminalStatus = statusFromTerminalRunEvent(terminalEvent);
+    for (const [nodeId, node] of runtimeNodes) {
+      if (node.data.runId !== runId) continue;
+      if (node.data.agentName === 'supervisor' && node.data.status === 'selecting') {
+        runtimeNodes.delete(nodeId);
+        continue;
+      }
+      if (!['selecting', 'running', 'waiting'].includes(node.data.status)) continue;
+
+      runtimeNodes.set(nodeId, {
+        ...node,
+        data: {
+          ...node.data,
+          description: terminalStatus === 'error'
+            ? ERROR_NODE_DESCRIPTION
+            : terminalEvent.message,
+          status: terminalStatus,
+          eventType: terminalEvent.event_type,
+          lastMessage: terminalEvent.message,
+          lastEventAt: terminalEvent.created_at,
+        },
+      });
+    }
   }
 
   if (pendingRunId && !runVisualState.has(pendingRunId)) {
