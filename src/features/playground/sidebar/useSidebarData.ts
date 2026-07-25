@@ -6,15 +6,40 @@ import { listAgentReports } from '@/features/playground/report/api';
 import { setCachedReports } from '@/features/playground/report/reportCache';
 import { toUiReport } from '@/features/playground/report/reportAdapter';
 import { REPORTS_UPDATED_EVENT } from '@/features/playground/report/reportEvents';
+import type { Report } from '@/features/playground/report/reportData';
 
 import { sidebarSections as mockSections } from './data';
 import type { SidebarSection } from './types';
 
 // 연결 단계에서 생성한 세션의 원본 사본 테이블들로 Database 섹션을 채운다
-export function useSidebarData(): SidebarSection[] {
-    const [sections, setSections] = useState<SidebarSection[]>(mockSections);
+function withReportOverride(reportsOverride?: Report[]): SidebarSection[] {
+    if (!reportsOverride) return mockSections;
+
+    return mockSections.map((section) => {
+        if (section.id !== 'report') return section;
+        return {
+            ...section,
+            items: reportsOverride.map((report) => ({
+                id: report.id,
+                label: report.title,
+                icon: 'report-file' as const,
+                meta: report.date,
+            })),
+        };
+    });
+}
+
+export function useSidebarData(reportsOverride?: Report[]): SidebarSection[] {
+    const [sections, setSections] = useState<SidebarSection[]>(
+        () => withReportOverride(reportsOverride),
+    );
 
     useEffect(() => {
+        if (reportsOverride) {
+            setSections(withReportOverride(reportsOverride));
+            return;
+        }
+
         let cancelled = false;
 
         async function load() {
@@ -71,7 +96,7 @@ export function useSidebarData(): SidebarSection[] {
             cancelled = true;
             window.removeEventListener(REPORTS_UPDATED_EVENT, load);
         };
-    }, []);
+    }, [reportsOverride]);
 
     return sections;
 }

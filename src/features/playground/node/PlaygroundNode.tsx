@@ -42,6 +42,7 @@ const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
 export function PlaygroundNode({ id, data, selected }: NodeProps<PlaygroundNodeType>) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const measuredWidthRef = useRef<number | null>(null);
+  const animateEntranceRef = useRef(data.animateOnCreate === true);
   const updateNodeInternals = useUpdateNodeInternals();
   const NodeIcon = NODE_ICONS[data.kind];
   const isSelecting = data.status === 'selecting';
@@ -85,8 +86,15 @@ export function PlaygroundNode({ id, data, selected }: NodeProps<PlaygroundNodeT
   return (
     <div
       ref={wrapperRef}
-      className={styles.wrapper}
+      className={`${styles.wrapper} ${
+        animateEntranceRef.current ? styles.wrapperEntering : ''
+      }`}
       style={{ '--node-enter-delay': `${enterDelay}ms` } as CSSProperties}
+      onAnimationEnd={(event) => {
+        if (event.target === event.currentTarget) {
+          updateNodeInternals(id);
+        }
+      }}
     >
       {queryBadges.length ? (
         <div
@@ -99,11 +107,14 @@ export function PlaygroundNode({ id, data, selected }: NodeProps<PlaygroundNodeT
               key={`${query.label}:${query.text}:${index}`}
               className={styles.queryBadge}
               aria-label={`${query.label}: ${query.text}`}
-              onMouseEnter={() => data.onFlowHover?.(query.flowNodeId ?? id)}
+              onMouseEnter={(event) => {
+                const badge = event.currentTarget;
+                requestAnimationFrame(() => {
+                  badge.style.setProperty('--query-badge-expanded-height', `${badge.scrollHeight}px`);
+                });
+                data.onFlowHover?.(query.flowNodeId ?? id);
+              }}
             >
-              {query.label !== '원본 쿼리' ? (
-                <span className={styles.queryBadgeLabel}>{query.label}</span>
-              ) : null}
               <span className={styles.queryBadgeText}>{query.text}</span>
             </div>
           ))}

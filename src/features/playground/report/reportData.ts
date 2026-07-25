@@ -1,5 +1,65 @@
 import type { GeneratedReport } from './types';
 
+export type ReportMetric = {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: 'neutral' | 'risk' | 'positive';
+};
+
+export type ReportTable = {
+  columns: string[];
+  rows: string[][];
+  caption?: string;
+};
+
+export type ReportSection = {
+  id: string;
+  kicker?: string;
+  title: string;
+  lede?: string;
+  paragraphs?: string[];
+  bullets?: string[];
+  chart?: {
+    src: string;
+    alt: string;
+    caption: string;
+    source: string;
+  };
+  table?: ReportTable;
+  callout?: {
+    label: string;
+    value?: string;
+    body: string;
+    tone?: 'neutral' | 'risk' | 'positive';
+  };
+};
+
+export type RichReportDocument = {
+  eyebrow: string;
+  subtitle: string;
+  period: string;
+  sampleLabel: string;
+  status: string;
+  metrics: ReportMetric[];
+  executiveSummary: string[];
+  methodology: string;
+  dataProfile?: string[];
+  qualityIssues?: string[];
+  hypotheses?: string[];
+  conclusion?: string;
+  sections: ReportSection[];
+  recommendations?: Array<{
+    priority: string;
+    title: string;
+    body: string;
+    owner: string;
+    measure: string;
+  }>;
+  limitations?: string[];
+  footerNote: string;
+};
+
 export type Report = {
   id: string;
   title: string;
@@ -8,6 +68,7 @@ export type Report = {
   markdown: string;
   runId?: string;
   generated?: GeneratedReport;
+  document?: RichReportDocument;
 };
 
 export const reports: Report[] = [

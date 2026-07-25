@@ -38,6 +38,12 @@ export function PlaygroundEdge({
   });
 
   useEffect(() => {
+    if (data?.animateOnCreate !== true) {
+      setHasPendingEntrance(false);
+    }
+  }, [data?.animateOnCreate]);
+
+  useEffect(() => {
     if (!isActive || !hasPendingEntrance) return undefined;
 
     const timer = window.setTimeout(() => setHasPendingEntrance(false), 720);

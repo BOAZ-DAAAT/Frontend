@@ -10,7 +10,7 @@ import {
 import { FileText, X, type LucideIcon } from 'lucide-react';
 
 import { getAgentRunArtifactContent } from '@/features/playground/node-summary/api';
-
+import { ReportDocument } from './ReportDocument';
 import type { Report } from './reportData';
 import type { GeneratedReport, ReportEvidenceTable } from './types';
 import styles from './ReportCard.module.css';
@@ -457,6 +457,10 @@ function ReportContent({ report }: { report: Report }) {
     return <StructuredReportContent report={report} generated={report.generated} />;
   }
 
+  if (report.document) {
+    return <ReportDocument report={report} />;
+  }
+
   return (
     <div className={styles.content}>
       <div className={styles.metaRow}>
@@ -502,7 +506,7 @@ export function ReportCard({
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         const scale = thumbnail.clientWidth / REPORT_WIDTH;
-        const height = Math.ceil(document.offsetHeight * scale);
+        const height = Math.min(320, Math.ceil(document.offsetHeight * scale));
 
         setThumbnailMetrics((current) => {
           if (current.height === height && current.scale === scale) return current;

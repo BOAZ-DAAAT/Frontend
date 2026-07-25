@@ -19,6 +19,7 @@ import {
   createAgentRun,
   deleteAgentRun,
   deleteAgentSessionRuns,
+  listAgentRunRelatedEvents,
   listAgentSessionEvents,
   resumeAgentRun,
   resumeAgentRunAnalysisReview,
@@ -56,6 +57,7 @@ import type { Session } from '@/features/session/types';
 import { BackendApiError } from '@/lib/apiClient';
 
 import { PlaygroundOverlay } from './PlaygroundOverlay';
+import type { Report } from '@/features/playground/report/reportData';
 import styles from './PlaygroundCanvas.module.css';
 
 // 모듈 레벨 상수 (매 렌더 재생성 방지)
@@ -67,6 +69,8 @@ const FALLBACK_NODE_WIDTH = 320;
 const FOLLOW_RESPONSE = 0.3;
 const NODE_CREATION_X_GAP = 460;
 const NODE_CREATION_BRANCH_Y_GAP = 240;
+const COLLISION_SEARCH_LIMIT = 200;
+const COLLISION_FALLBACK_GAP = 32;
 const INITIAL_NODE_WIDTH = 368;
 const INITIAL_NODE_HEIGHT = 156;
 const NEW_PROMPT_NODE_Y_GAP = 220;
@@ -80,12 +84,13 @@ const TERMINAL_RUN_STATUSES = new Set<RunSummary['status']>([
 ]);
 
 function createDatasourceNode(
-  sessionId: string,
+  datasourceNodeId: string,
   session: Session | null,
   position: { x: number; y: number },
+  animateOnCreate = false,
 ): Node<PlaygroundNodeData> {
   return {
-    id: `datasource:${sessionId}`,
+    id: datasourceNodeId,
     type: 'playground',
     position,
     data: {
@@ -101,6 +106,7 @@ function createDatasourceNode(
       nodeSequence: 0,
       parentNodeId: null,
       agentName: 'datasource',
+      animateOnCreate,
     },
   };
 }
@@ -136,6 +142,14 @@ type PlaygroundCanvasProps = {
   onClosePreview: () => void;
   isLeavingForSessions: boolean;
   isEnteringFromSessions: boolean;
+  initialGraphOverride?: PlaygroundInitialGraph;
+  isolated?: boolean;
+  reportsOverride?: Report[];
+};
+
+export type PlaygroundInitialGraph = {
+  nodes: Array<Node<PlaygroundNodeData>>;
+  edges: Edge[];
 };
 
 type Clarification = {
@@ -275,6 +289,96 @@ function boundsOverlap(
     && left.top < right.bottom
     && left.bottom > right.top
   );
+}
+
+function overlapsAnyNode(
+  node: Node<PlaygroundNodeData>,
+  position: { x: number; y: number },
+  occupiedNodes: Array<Node<PlaygroundNodeData>>,
+  ignoredNodeIds: Set<string> = new Set([node.id]),
+) {
+  const bounds = getNodeCollisionBounds(node, position);
+  return occupiedNodes.some((occupiedNode) => (
+    !ignoredNodeIds.has(occupiedNode.id)
+    && boundsOverlap(
+      bounds,
+      getNodeCollisionBounds(occupiedNode, occupiedNode.position),
+    )
+  ));
+}
+
+function findNonOverlappingPosition(
+  node: Node<PlaygroundNodeData>,
+  preferredPosition: { x: number; y: number },
+  occupiedNodes: Array<Node<PlaygroundNodeData>>,
+) {
+  for (let laneOffset = 0; laneOffset < COLLISION_SEARCH_LIMIT; laneOffset += 1) {
+    const candidate = {
+      x: preferredPosition.x,
+      y: preferredPosition.y + laneOffset * NODE_CREATION_BRANCH_Y_GAP,
+    };
+    if (!overlapsAnyNode(node, candidate, occupiedNodes)) return candidate;
+  }
+  const maxOccupiedBottom = Math.max(
+    preferredPosition.y,
+    ...occupiedNodes
+      .filter((occupiedNode) => occupiedNode.id !== node.id)
+      .map((occupiedNode) => (
+        getNodeCollisionBounds(occupiedNode, occupiedNode.position).bottom
+      )),
+  );
+  const preferredBounds = getNodeCollisionBounds(node, preferredPosition);
+  return {
+    x: preferredPosition.x,
+    y: maxOccupiedBottom
+      + COLLISION_FALLBACK_GAP
+      + (preferredPosition.y - preferredBounds.top),
+  };
+}
+
+function findNonOverlappingFlowStartPosition(
+  rootNode: Node<PlaygroundNodeData>,
+  datasourceNode: Node<PlaygroundNodeData>,
+  preferredRootPosition: { x: number; y: number },
+  occupiedNodes: Array<Node<PlaygroundNodeData>>,
+) {
+  const ignoredNodeIds = new Set([rootNode.id, datasourceNode.id]);
+
+  for (let laneOffset = 0; laneOffset < COLLISION_SEARCH_LIMIT; laneOffset += 1) {
+    const rootPosition = {
+      x: preferredRootPosition.x,
+      y: preferredRootPosition.y + laneOffset * NODE_CREATION_BRANCH_Y_GAP,
+    };
+    const datasourcePosition = {
+      x: rootPosition.x - NODE_CREATION_X_GAP,
+      y: rootPosition.y,
+    };
+    if (
+      !overlapsAnyNode(rootNode, rootPosition, occupiedNodes, ignoredNodeIds)
+      && !overlapsAnyNode(datasourceNode, datasourcePosition, occupiedNodes, ignoredNodeIds)
+    ) {
+      return rootPosition;
+    }
+  }
+  const maxOccupiedBottom = Math.max(
+    preferredRootPosition.y,
+    ...occupiedNodes
+      .filter((node) => !ignoredNodeIds.has(node.id))
+      .map((node) => getNodeCollisionBounds(node, node.position).bottom),
+  );
+  const rootBounds = getNodeCollisionBounds(rootNode, preferredRootPosition);
+  const datasourceBounds = getNodeCollisionBounds(datasourceNode, {
+    x: preferredRootPosition.x - NODE_CREATION_X_GAP,
+    y: preferredRootPosition.y,
+  });
+  const topOffset = Math.max(
+    preferredRootPosition.y - rootBounds.top,
+    preferredRootPosition.y - datasourceBounds.top,
+  );
+  return {
+    x: preferredRootPosition.x,
+    y: maxOccupiedBottom + COLLISION_FALLBACK_GAP + topOffset,
+  };
 }
 
 function getDescendantNodeIds(edges: Edge[], rootId: string): Set<string> {
@@ -494,27 +598,123 @@ function mergeRunEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
   ));
 }
 
+const RETAINABLE_NODE_EVENTS = new Set([
+  'supervisor.selection.started',
+  'agent.started',
+  'agent.progress',
+  'agent.retrying',
+  'agent.waiting',
+  'agent.resumed',
+  'agent.completed',
+  'agent.failed',
+  'agent.discarded',
+  'human_input.resumed',
+]);
+
+function getExplicitlyRemovedEventNodeIds(events: RunEvent[]): Set<string> {
+  const latestLifecycleByNodeId = new Map<
+    string,
+    {
+      eventType: string;
+      runId: string;
+      agentName: string;
+      attempt: number;
+      reasonCode: string | null;
+    }
+  >();
+  const terminalRunIds = new Set<string>();
+
+  for (const event of events) {
+    if (['run.completed', 'run.failed', 'run.cancelled'].includes(event.event_type)) {
+      terminalRunIds.add(event.run_id);
+    }
+    if (!RETAINABLE_NODE_EVENTS.has(event.event_type)) continue;
+
+    const nodeId = event.metadata?.node_id;
+    if (typeof nodeId !== 'string' || !nodeId) continue;
+    const metadataAgentName = event.metadata?.agent_name;
+    const metadataAttempt = event.metadata?.attempt;
+    const attempt = typeof metadataAttempt === 'number' && Number.isFinite(metadataAttempt)
+      ? metadataAttempt
+      : 0;
+    const latestLifecycle = latestLifecycleByNodeId.get(nodeId);
+    if (latestLifecycle && attempt < latestLifecycle.attempt) continue;
+    latestLifecycleByNodeId.set(nodeId, {
+      eventType: event.event_type,
+      runId: event.run_id,
+      agentName: typeof metadataAgentName === 'string'
+        ? metadataAgentName
+        : event.node_name ?? '',
+      attempt,
+      reasonCode: typeof event.metadata?.reason_code === 'string'
+        ? event.metadata.reason_code
+        : null,
+    });
+  }
+
+  return new Set(
+    [...latestLifecycleByNodeId]
+      .filter(([, lifecycle]) => (
+        (
+          lifecycle.eventType === 'agent.discarded'
+          && lifecycle.reasonCode !== 'run_cancelled'
+        )
+        || (
+          lifecycle.agentName === 'supervisor'
+          && terminalRunIds.has(lifecycle.runId)
+        )
+      ))
+      .map(([nodeId]) => nodeId),
+  );
+}
+
 export function PlaygroundCanvas({
   preview,
   onClosePreview,
   isLeavingForSessions,
   isEnteringFromSessions,
+  initialGraphOverride,
+  isolated = false,
+  reportsOverride,
 }: PlaygroundCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const reactFlowInstanceRef = useRef<
     ReactFlowInstance<Node<PlaygroundNodeData>, Edge> | null
   >(null);
   const initialGraph = useMemo(
-    () => deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges),
-    [],
+    () => {
+      if (!initialGraphOverride) {
+        return deriveNodeGraphFromEvents([], playgroundNodes, playgroundEdges);
+      }
+      return {
+        nodes: initialGraphOverride.nodes.map((node) => ({
+          ...node,
+          position: { ...node.position },
+          data: {
+            ...node.data,
+            queryBadges: node.data.queryBadges?.map((query) => ({ ...query })),
+          },
+        })),
+        edges: initialGraphOverride.edges.map((edge) => ({
+          ...edge,
+          data: edge.data ? { ...edge.data } : undefined,
+        })),
+      };
+    },
+    [initialGraphOverride],
   );
   const initialStoredGraph = useMemo(
-    () => getStoredPlaygroundGraph(initialGraph.nodes, initialGraph.edges),
-    [initialGraph.edges, initialGraph.nodes],
+    () => (
+      isolated
+        ? initialGraph
+        : getStoredPlaygroundGraph(initialGraph.nodes, initialGraph.edges)
+    ),
+    [initialGraph, isolated],
   );
   const [nodes, setNodes] = useNodesState(initialStoredGraph.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialStoredGraph.edges);
   const [activeFlowTarget, setActiveFlowTarget] = useState<ActiveFlowTarget | null>(() => {
+    if (isolated) return null;
     const runId = getStoredActiveRunId();
     return runId ? { nodeId: null, runId } : null;
   });
@@ -540,9 +740,11 @@ export function PlaygroundCanvas({
   const followAnimationFrame = useRef<number | null>(null);
   const snapAnimationFrame = useRef<number | null>(null);
 
-  const [activeRunId, setActiveRunId] = useState<string | null>(() => getStoredActiveRunId());
+  const [activeRunId, setActiveRunId] = useState<string | null>(() => (
+    isolated ? null : getStoredActiveRunId()
+  ));
   const [locallyStartedRunId, setLocallyStartedRunId] = useState<string | null>(null);
-  const currentSessionId = getCurrentSessionId();
+  const currentSessionId = isolated ? null : getCurrentSessionId();
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [isDeletingNodes, setIsDeletingNodes] = useState(false);
   const [deleteNodesError, setDeleteNodesError] = useState<string | null>(null);
@@ -563,10 +765,11 @@ export function PlaygroundCanvas({
     events,
     error: runStreamError,
     reconnect: reconnectRunStream,
-  } = useAgentRunStream(activeRunId);
+  } = useAgentRunStream(isolated ? null : activeRunId);
   const [visibleEvents, setVisibleEvents] = useState<RunEvent[]>([]);
 
   useEffect(() => {
+    if (isolated) return;
     if (!currentSessionId) {
       setCurrentSession(null);
       return;
@@ -583,7 +786,7 @@ export function PlaygroundCanvas({
     return () => {
       cancelled = true;
     };
-  }, [currentSessionId]);
+  }, [currentSessionId, isolated]);
 
   const handleDeleteRunStable = useCallback(async (runId: string, label: string) => {
     const shouldDelete = window.confirm(
@@ -598,8 +801,31 @@ export function PlaygroundCanvas({
         ? await listAgentSessionEvents(sessionId)
         : visibleEvents.filter((event) => event.run_id !== runId);
       const remainingRunIds = new Set(remainingEvents.map((event) => event.run_id));
+      const removedRunIds = new Set([
+        runId,
+        ...visibleEvents
+          .map((event) => event.run_id)
+          .filter((eventRunId) => !remainingRunIds.has(eventRunId)),
+      ]);
+      const belongsToRemovedRun = (nodeId: string) => (
+        [...removedRunIds].some((removedRunId) => (
+          nodeId === `datasource:${removedRunId}`
+          || nodeId.startsWith(`${removedRunId}:`)
+        ))
+      );
       const fallbackRunId = remainingEvents[0]?.run_id ?? null;
       setVisibleEvents(remainingEvents);
+      setNodes((currentNodes) => currentNodes.filter((node) => (
+        !(
+          node.data.runId
+          && removedRunIds.has(node.data.runId)
+        )
+        && !belongsToRemovedRun(node.id)
+      )));
+      setEdges((currentEdges) => currentEdges.filter((edge) => (
+        !belongsToRemovedRun(edge.source)
+        && !belongsToRemovedRun(edge.target)
+      )));
       setSelectedNodeSummary((selected) => (
         selected?.runId && !remainingRunIds.has(selected.runId) ? null : selected
       ));
@@ -626,13 +852,14 @@ export function PlaygroundCanvas({
       window.alert(message);
       throw error;
     }
-  }, [activeRunId, visibleEvents]);
+  }, [activeRunId, setEdges, setNodes, visibleEvents]);
 
   useEffect(() => {
     setVisibleEvents((currentEvents) => mergeRunEvents(currentEvents, events));
   }, [events]);
 
   useEffect(() => {
+    if (isolated) return;
     // 새로고침 직후엔 activeRunId의 계보만 들어와 있으니, 세션에서 시작한 다른 메인
     // 쿼리 트리들도 마운트 시점에 한 번 통째로 가져와 합쳐준다.
     const sessionId = getCurrentSessionId();
@@ -649,20 +876,22 @@ export function PlaygroundCanvas({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isolated]);
 
   useEffect(() => {
+    if (isolated) return;
     setStoredPlaygroundGraph(nodes, edges);
-  }, [edges, nodes]);
+  }, [edges, isolated, nodes]);
 
   useEffect(() => {
+    if (isolated) return;
     // 새로고침으로 복원한 run_id가 더 이상 존재하지 않으면(삭제됨 등) 저장값을 비운다.
     if (runStreamError && !run) {
       clearStoredActiveRunId();
       setActiveRunId(null);
       setActiveFlowTarget(null);
     }
-  }, [runStreamError, run]);
+  }, [isolated, runStreamError, run]);
 
   const { collapse, view } = useSidebar();
   const { mode } = useMode();
@@ -852,11 +1081,14 @@ export function PlaygroundCanvas({
         .filter((node) => movingIds.has(node.id))
         .map((node) => [node.id, node]),
     );
+    movingNodesById.set(draggedNode.id, draggedNode);
     const stationaryNodes = nodes.filter((node) => !movingIds.has(node.id));
-    const hasNodeCollision = [...movingNodesById].some(([nodeId, movingNode]) => {
+    const proposedMovingNodes = [...movingNodesById].flatMap(([nodeId, movingNode]) => {
       const movingPosition = proposedTargetPositions.get(nodeId);
-      if (!movingPosition) return false;
-      const movingBounds = getNodeCollisionBounds(movingNode, movingPosition);
+      return movingPosition ? [{ node: movingNode, position: movingPosition }] : [];
+    });
+    const hasStationaryNodeCollision = proposedMovingNodes.some(({ node, position }) => {
+      const movingBounds = getNodeCollisionBounds(node, position);
       return stationaryNodes.some((stationaryNode) => (
         boundsOverlap(
           movingBounds,
@@ -864,6 +1096,16 @@ export function PlaygroundCanvas({
         )
       ));
     });
+    const hasMovingNodeCollision = proposedMovingNodes.some((movingNode, index) => {
+      const movingBounds = getNodeCollisionBounds(movingNode.node, movingNode.position);
+      return proposedMovingNodes.slice(index + 1).some((otherNode) => (
+        boundsOverlap(
+          movingBounds,
+          getNodeCollisionBounds(otherNode.node, otherNode.position),
+        )
+      ));
+    });
+    const hasNodeCollision = hasStationaryNodeCollision || hasMovingNodeCollision;
     const targetPositions = hasCrossedParentBoundary || hasNodeCollision
       ? originalPositions
       : proposedTargetPositions;
@@ -921,6 +1163,7 @@ export function PlaygroundCanvas({
   }, [analysisReview?.requestKey]);
 
   useEffect(() => {
+    if (isolated) return;
     const isRestoringStoredRun = Boolean(
       activeRunId
       && locallyStartedRunId !== activeRunId
@@ -939,20 +1182,49 @@ export function PlaygroundCanvas({
       playgroundEdges,
       isRunActive ? activeRunId : null,
     );
+    const explicitlyRemovedEventNodeIds = getExplicitlyRemovedEventNodeIds(visibleEvents);
+    const terminalRunIds = new Set(
+      visibleEvents
+        .filter((event) => (
+          ['run.completed', 'run.failed', 'run.cancelled'].includes(event.event_type)
+        ))
+        .map((event) => event.run_id),
+    );
+    const removedVisualNodeIds = new Set(explicitlyRemovedEventNodeIds);
+    for (const node of nodes) {
+      if (
+        node.data.agentName === 'supervisor'
+        && node.data.runId
+        && terminalRunIds.has(node.data.runId)
+      ) {
+        removedVisualNodeIds.add(node.id);
+      }
+    }
     const eventTargetNodeIds = new Set(nextGraph.edges.map((edge) => edge.target));
     const rootEventNodes = nextGraph.nodes.filter((node) => !eventTargetNodeIds.has(node.id));
-    const datasourceEdges: Edge[] = currentSessionId
-      ? rootEventNodes.map((node) => ({
-          id: `datasource:${currentSessionId}-to-${node.id}`,
-          source: `datasource:${currentSessionId}`,
-          target: node.id,
-          type: 'playground',
-          selectable: false,
-          animated: false,
-          zIndex: 0,
-          data: { flowState: 'idle' },
-        }))
-      : [];
+    const datasourceIdByRootNodeId = new Map(
+      currentSessionId
+        ? rootEventNodes.map((node) => [
+            node.id,
+            node.data.parentNodeId?.startsWith('datasource:')
+              ? node.data.parentNodeId
+              : `datasource:${node.data.runId ?? node.id}`,
+          ] as const)
+        : [],
+    );
+    const datasourceEdges: Edge[] = rootEventNodes.flatMap((node) => {
+      const datasourceId = datasourceIdByRootNodeId.get(node.id);
+      return datasourceId ? [{
+        id: `${datasourceId}-to-${node.id}`,
+        source: datasourceId,
+        target: node.id,
+        type: 'playground',
+        selectable: false,
+        animated: false,
+        zIndex: 0,
+        data: { flowState: 'idle' },
+      }] : [];
+    });
     const shouldAnimateNewEdges = hasReconciledEventGraph.current;
     setNodes((currentNodes) => {
       const manualNodes = currentNodes.filter((node) => node.id.startsWith('manual-'));
@@ -1020,14 +1292,16 @@ export function PlaygroundCanvas({
           : null;
         const data = {
           ...node.data,
+          parentNodeId: datasourceIdByRootNodeId.get(node.id) ?? node.data.parentNodeId,
           queryLabel: node.data.queryLabel ?? inheritedQuery?.label,
           queryText: node.data.queryText ?? inheritedQuery?.text,
+          animateOnCreate: !currentNode && shouldAnimateNewEdges,
           onDeleteRun: handleDeleteRunStable,
         };
         const parentNode = data.parentNodeId
           ? positionedNodesById.get(data.parentNodeId)
           : null;
-        const position = currentNode?.position ?? {
+        const preferredPosition = currentNode?.position ?? {
           ...node.position,
           x: parentNode
             ? Math.max(node.position.x, parentNode.position.x + NODE_CREATION_X_GAP)
@@ -1036,11 +1310,31 @@ export function PlaygroundCanvas({
             ? parentNode.position.y
             : node.position.y,
         };
-        const positionedNode = {
+        let positionedNode = {
           ...node,
-          position,
+          position: preferredPosition,
           data,
         };
+        if (!currentNode) {
+          const occupiedNodes = [...positionedNodesById.values()];
+          const datasourceId = datasourceIdByRootNodeId.get(node.id);
+          const position = datasourceId
+            ? findNonOverlappingFlowStartPosition(
+              positionedNode,
+              createDatasourceNode(
+                datasourceId,
+                currentSession,
+                {
+                  x: preferredPosition.x - NODE_CREATION_X_GAP,
+                  y: preferredPosition.y,
+                },
+              ),
+              preferredPosition,
+              occupiedNodes,
+            )
+            : findNonOverlappingPosition(positionedNode, preferredPosition, occupiedNodes);
+          positionedNode = { ...positionedNode, position };
+        }
         positionedNodesById.set(node.id, positionedNode);
         return positionedNode;
       });
@@ -1110,36 +1404,68 @@ export function PlaygroundCanvas({
         };
       });
 
-      const currentDatasourceNode = currentSessionId
-        ? currentNodesById.get(`datasource:${currentSessionId}`)
-        : null;
-      const firstRootNode = eventNodesWithQueryBadges.find(
-        (node) => !eventTargetNodeIds.has(node.id),
+      const rootNodeByDatasourceId = new Map<string, Node<PlaygroundNodeData>>();
+      for (const node of eventNodesWithQueryBadges) {
+        const datasourceId = datasourceIdByRootNodeId.get(node.id);
+        if (datasourceId && !rootNodeByDatasourceId.has(datasourceId)) {
+          rootNodeByDatasourceId.set(datasourceId, node);
+        }
+      }
+      const datasourceNodes = [...rootNodeByDatasourceId].map(
+        ([datasourceId, rootNode]) => {
+
+          const currentDatasourceNode = currentNodesById.get(datasourceId);
+          const defaultPosition = {
+            x: rootNode.position.x - NODE_CREATION_X_GAP,
+            y: rootNode.position.y,
+          };
+          const datasourceNode = createDatasourceNode(
+            datasourceId,
+            currentSession,
+            defaultPosition,
+            !currentDatasourceNode && shouldAnimateNewEdges,
+          );
+          const occupiedNodes = [
+            ...currentNodes,
+            ...eventNodesWithQueryBadges,
+          ];
+          const canKeepCurrentPosition = Boolean(
+            currentDatasourceNode
+            && !overlapsAnyNode(
+              datasourceNode,
+              currentDatasourceNode.position,
+              occupiedNodes,
+            ),
+          );
+          const preferredPosition = currentDatasourceNode && canKeepCurrentPosition
+            ? currentDatasourceNode.position
+            : defaultPosition;
+          const position = findNonOverlappingPosition(
+            datasourceNode,
+            preferredPosition,
+            occupiedNodes,
+          );
+          return { ...datasourceNode, position };
+        },
       );
-      const defaultDatasourcePosition = firstRootNode
-        ? {
-            x: firstRootNode.position.x - NODE_CREATION_X_GAP,
-            y: firstRootNode.position.y,
-          }
-        : { x: 0, y: 120 };
-      const datasourceOverlapsRoot = Boolean(
-        currentDatasourceNode
-        && firstRootNode
-        && boundsOverlap(
-          getNodeCollisionBounds(currentDatasourceNode, currentDatasourceNode.position),
-          getNodeCollisionBounds(firstRootNode, firstRootNode.position),
-        ),
-      );
-      const datasourcePosition = currentDatasourceNode && !datasourceOverlapsRoot
-        ? currentDatasourceNode.position
-        : defaultDatasourcePosition;
-      const datasourceNode = currentSessionId
-        ? createDatasourceNode(currentSessionId, currentSession, datasourcePosition)
-        : null;
+      const nextNodeIds = new Set(eventNodesWithQueryBadges.map((node) => node.id));
+      const retainedEventNodes = currentNodes.filter((node) => (
+        node.data.kind !== 'datasource'
+        && !node.id.startsWith('manual-')
+        && !nextNodeIds.has(node.id)
+        && !removedVisualNodeIds.has(node.id)
+      ));
+      const generatedDatasourceIds = new Set(datasourceNodes.map((node) => node.id));
+      const retainedDatasourceNodes = currentNodes.filter((node) => (
+        node.data.kind === 'datasource'
+        && !generatedDatasourceIds.has(node.id)
+      ));
 
       return [
-        ...(datasourceNode ? [datasourceNode] : []),
+        ...datasourceNodes,
+        ...retainedDatasourceNodes,
         ...eventNodesWithQueryBadges,
+        ...retainedEventNodes,
         ...manualNodes,
       ];
     });
@@ -1159,15 +1485,26 @@ export function PlaygroundCanvas({
           };
         }
 
-        const data = { ...currentEdge.data, ...edge.data };
+        const data = {
+          ...currentEdge.data,
+          ...edge.data,
+          animateOnCreate: false,
+        };
         return {
           ...edge,
           data,
           zIndex: 0,
         };
       });
+      const nextEventEdgeIds = new Set(eventEdges.map((edge) => edge.id));
+      const retainedEventEdges = currentEdges.filter((edge) => (
+        !edge.id.startsWith('manual-edge-')
+        && !nextEventEdgeIds.has(edge.id)
+        && !removedVisualNodeIds.has(edge.source)
+        && !removedVisualNodeIds.has(edge.target)
+      ));
 
-      return [...eventEdges, ...manualEdges];
+      return [...eventEdges, ...retainedEventEdges, ...manualEdges];
     });
     hasReconciledEventGraph.current = true;
 
@@ -1196,6 +1533,7 @@ export function PlaygroundCanvas({
     currentSession,
     currentSessionId,
     handleDeleteRunStable,
+    isolated,
     isRunActive,
     locallyStartedRunId,
     run,
@@ -1315,7 +1653,7 @@ export function PlaygroundCanvas({
   }, [mode]);
 
   const handlePromptSend = async (prompt: string) => {
-    if (isGenerating) return;
+    if (isGenerating || isolated) return;
 
     const sessionId = getCurrentSessionId();
     if (!sessionId) {
@@ -1325,8 +1663,6 @@ export function PlaygroundCanvas({
 
     setIsStartingRun(true);
     setCancelRunError(null);
-    setActiveRunId(null);
-    setLocallyStartedRunId(null);
     setSelectedNodeSummary(null);
 
     const canvasBounds = canvasRef.current?.getBoundingClientRect();
@@ -1336,31 +1672,74 @@ export function PlaygroundCanvas({
           y: canvasBounds.top + canvasBounds.height / 2,
         })
       : { x: 0, y: 120 };
-    const initialNodePosition = getNewPromptNodePosition(nodes, viewportCenter);
+    const preferredInitialNodePosition = getNewPromptNodePosition(nodes, viewportCenter);
 
     try {
       const run = await createAgentRun(sessionId, prompt);
       const initialNodeId = `${run.run_id}:node:1`;
-      setNodes((currentNodes) => [
-        ...currentNodes.filter((node) => node.id !== initialNodeId),
+      const datasourceNodeId = `datasource:${run.run_id}`;
+      const initialNode: Node<PlaygroundNodeData> = {
+        id: initialNodeId,
+        type: 'playground',
+        position: preferredInitialNodePosition,
+        data: {
+          label: 'Agent 선택 중',
+          description: '분석 계획과 현재 근거를 검토하고 있습니다.',
+          kind: 'supervisor',
+          status: 'selecting',
+          eventType: 'supervisor.selection.started',
+          lastMessage: '다음 Agent를 선택하고 있습니다.',
+          runId: run.run_id,
+          nodeSequence: 1,
+          parentNodeId: null,
+          agentName: 'supervisor',
+          queryLabel: '원본 쿼리',
+          queryText: prompt,
+          animateOnCreate: true,
+        },
+      };
+      const datasourceNode = createDatasourceNode(
+        datasourceNodeId,
+        currentSession,
         {
-          id: initialNodeId,
-          type: 'playground',
+          x: preferredInitialNodePosition.x - NODE_CREATION_X_GAP,
+          y: preferredInitialNodePosition.y,
+        },
+        true,
+      );
+      const initialNodePosition = findNonOverlappingFlowStartPosition(
+        initialNode,
+        datasourceNode,
+        preferredInitialNodePosition,
+        nodes,
+      );
+      const datasourcePosition = {
+        x: initialNodePosition.x - NODE_CREATION_X_GAP,
+        y: initialNodePosition.y,
+      };
+      setNodes((currentNodes) => [
+        ...currentNodes.filter(
+          (node) => node.id !== initialNodeId && node.id !== datasourceNodeId,
+        ),
+        createDatasourceNode(datasourceNodeId, currentSession, datasourcePosition, true),
+        {
+          ...initialNode,
           position: initialNodePosition,
-          data: {
-            label: 'Agent 선택 중',
-            description: '분석 계획과 현재 근거를 검토하고 있습니다.',
-            kind: 'supervisor',
-            status: 'selecting',
-            eventType: 'supervisor.selection.started',
-            lastMessage: '다음 Agent를 선택하고 있습니다.',
-            runId: run.run_id,
-            nodeSequence: 1,
-            parentNodeId: null,
-            agentName: 'supervisor',
-            queryLabel: '원본 쿼리',
-            queryText: prompt,
-          },
+        },
+      ]);
+      setEdges((currentEdges) => [
+        ...currentEdges.filter(
+          (edge) => edge.source !== datasourceNodeId && edge.target !== initialNodeId,
+        ),
+        {
+          id: `${datasourceNodeId}-to-${initialNodeId}`,
+          source: datasourceNodeId,
+          target: initialNodeId,
+          type: 'playground',
+          selectable: false,
+          animated: false,
+          zIndex: 0,
+          data: { flowState: 'active', animateOnCreate: true },
         },
       ]);
       setActiveRunId(run.run_id);
@@ -1391,6 +1770,14 @@ export function PlaygroundCanvas({
     setCancelRunError(null);
     try {
       await cancelAgentRun(activeRunId);
+      const cancelledRunEvents = await listAgentRunRelatedEvents(activeRunId)
+        .catch(() => null);
+      if (cancelledRunEvents) {
+        setVisibleEvents((currentEvents) => (
+          mergeRunEvents(currentEvents, cancelledRunEvents)
+        ));
+      }
+      reconnectRunStream();
     } catch (error) {
       const message = error instanceof BackendApiError
         ? error.message
@@ -1481,29 +1868,39 @@ export function PlaygroundCanvas({
       const manualNodeCount = currentNodes.filter((node) => node.id.startsWith('manual-')).length;
       const column = manualNodeCount % 3;
       const row = Math.floor(manualNodeCount / 3);
-      const nextPosition = selectedNode
+      const preferredPosition = selectedNode
         ? {
             x: selectedNode.position.x + NODE_CREATION_X_GAP,
             y: selectedNode.position.y
               + (existingChildCount > 0 ? existingChildCount * NODE_CREATION_BRANCH_Y_GAP : 0),
           }
         : { x: 280 + column * 384, y: 320 + row * 200 };
+      const newNode: Node<PlaygroundNodeData> = {
+        id: nodeId,
+        type: 'playground',
+        position: preferredPosition,
+        selected: true,
+        data: {
+          ...NODE_DEFAULTS[kind],
+          kind,
+          status: 'idle',
+          parentNodeId: selectedNode?.id ?? null,
+          animateOnCreate: true,
+        },
+      };
+      const nextPosition = findNonOverlappingPosition(
+        newNode,
+        preferredPosition,
+        currentNodes,
+      );
 
       return [
         ...currentNodes.map((node) => (
           node.selected ? { ...node, selected: false } : node
         )),
         {
-          id: nodeId,
-          type: 'playground',
+          ...newNode,
           position: nextPosition,
-          selected: true,
-          data: {
-            ...NODE_DEFAULTS[kind],
-            kind,
-            status: 'idle',
-            parentNodeId: selectedNode?.id ?? null,
-          },
         },
       ];
     });
@@ -1526,6 +1923,10 @@ export function PlaygroundCanvas({
     if (node.data.status === 'selecting' || node.data.kind === 'datasource') return;
 
     setActiveFlowTarget({ nodeId: node.id, runId: node.data.runId ?? null });
+    if (isolated) {
+      setSelectedNodeSummary(null);
+      return;
+    }
 
     if (mode === 'report') {
       setSelectedNodeSummary(null);
@@ -1599,6 +2000,15 @@ export function PlaygroundCanvas({
 
   const handleDeleteAllNodes = async () => {
     if (isGenerating || isDeletingNodes || !hasDeletableNodes) return;
+    if (isolated) {
+      const confirmed = window.confirm('테스트 페이지의 모든 임시 노드를 지울까요?');
+      if (!confirmed) return;
+      setNodes([]);
+      setEdges([]);
+      setActiveFlowTarget(null);
+      setSelectedNodeSummary(null);
+      return;
+    }
     const confirmed = window.confirm(
       '현재 실행의 모든 노드와 서머리 데이터를 영구적으로 삭제할까요?',
     );
@@ -1621,14 +2031,7 @@ export function PlaygroundCanvas({
       setVisibleEvents([]);
       setSelectedNodeSummary(null);
       setNodeReportRequest({ data: null, error: null, isLoading: false });
-      const datasourceNode = currentSessionId
-        ? createDatasourceNode(
-            currentSessionId,
-            currentSession,
-            nodes.find((node) => node.data.kind === 'datasource')?.position ?? { x: 0, y: 120 },
-          )
-        : null;
-      setNodes(datasourceNode ? [datasourceNode] : initialGraph.nodes);
+      setNodes(initialGraph.nodes);
       setEdges(initialGraph.edges);
     } catch (error) {
       const message = error instanceof BackendApiError
@@ -1719,6 +2122,7 @@ export function PlaygroundCanvas({
         onCreateNode={handleCreateNode}
         isLeavingForSessions={isLeavingForSessions}
         isEnteringFromSessions={isEnteringFromSessions}
+        reportsOverride={reportsOverride}
       />
     </div>
   );

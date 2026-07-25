@@ -7,11 +7,15 @@ import { NodeCreator, type CreatableNodeKind } from '@/features/playground/node-
 import { NodeSummaryPanel } from '@/features/playground/node-summary/NodeSummaryPanel';
 import { GeneratedReportPanel } from '@/features/playground/report/GeneratedReportPanel';
 import { ReportWorkspace } from '@/features/playground/report/ReportWorkspace';
+import type { Report } from '@/features/playground/report/reportData';
 import type { AgentNodeReportResponse } from '@/features/playground/report/types';
 import { Sidebar } from '@/features/playground/sidebar/Sidebar';
 import { useSidebar } from '@/features/playground/sidebar/SidebarContext';
 import { SessionConnectPanel } from '@/features/session/connect/SessionConnectPanel';
-import type { PlaygroundNodeKind } from '@/features/playground/types';
+import type {
+  PlaygroundNodeKind,
+  PlaygroundNodeStatus,
+} from '@/features/playground/types';
 import type { NodeSummary } from '@/features/playground/node-summary/types';
 import { TablePreviewPanel } from '@/features/playground/table-preview/TablePreviewPanel';
 import { Toolbar } from '@/features/playground/toolbar/Toolbar';
@@ -65,7 +69,7 @@ interface PlaygroundOverlayProps {
     id: string;
     label: string;
     kind: PlaygroundNodeKind;
-    status: 'selecting' | 'idle' | 'running' | 'waiting' | 'success' | 'error';
+    status: PlaygroundNodeStatus;
   } | null;
   nodeSummaryData: NodeSummary | null;
   nodeSummaryRunId: string | null;
@@ -86,6 +90,7 @@ interface PlaygroundOverlayProps {
   onCreateNode: (kind: CreatableNodeKind) => void;
   isLeavingForSessions: boolean;
   isEnteringFromSessions: boolean;
+  reportsOverride?: Report[];
 }
 
 export function PlaygroundOverlay({
@@ -127,6 +132,7 @@ export function PlaygroundOverlay({
   onCreateNode,
   isLeavingForSessions,
   isEnteringFromSessions,
+  reportsOverride,
 }: PlaygroundOverlayProps) {
   const { activeSection, closeSessionCreate, selectSession, sessionPane, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
@@ -153,7 +159,9 @@ export function PlaygroundOverlay({
 
       {!isSessionView ? <div className={styles.nodeCreatorDock}><NodeCreator onCreate={onCreateNode} /></div> : null}
 
-      {!isSessionView && isReportWorkspaceOpen ? <ReportWorkspace /> : null}
+      {!isSessionView && isReportWorkspaceOpen ? (
+        <ReportWorkspace reportsOverride={reportsOverride} />
+      ) : null}
 
       {!isSessionView && (generatedReport || generatedReportError || isGeneratingReport) ? (
         <GeneratedReportPanel
@@ -186,7 +194,7 @@ export function PlaygroundOverlay({
 
       {/* 좌상단 고정: 사이드바 */}
       <div className={styles.sidebarDock}>
-        <Sidebar />
+        <Sidebar reportsOverride={reportsOverride} />
       </div>
 
       {isSessionView && sessionPane === 'create' ? (

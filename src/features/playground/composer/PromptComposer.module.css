@@ -626,8 +626,10 @@
 }
 
 .sendButton {
+  position: relative;
   height: 2rem;
   width: 3rem;
+  overflow: hidden;
   border-radius: 999px;
   border: 1px solid rgb(255 255 255 / 18%);
   background: var(--color-flow-active);
@@ -637,8 +639,55 @@
     0 8px 18px rgb(52 52 52 / 18%);
 }
 
+.stopButtonActive {
+  isolation: isolate;
+  background: transparent;
+}
+
+.stopButtonVisual,
+.stopButtonBlob {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.stopButtonVisual {
+  display: grid;
+  align-items: center;
+  justify-items: center;
+  overflow: hidden;
+}
+
+.stopButtonBlob {
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.stopButtonBlob > canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7rem;
+  max-width: none;
+  height: auto;
+  filter: blur(1.2px) saturate(1.1);
+  transform: translate(-50%, -50%);
+}
+
+.stopButtonIcon {
+  position: relative;
+  z-index: 1;
+  color: #ffffff;
+  filter: drop-shadow(0 1px 2px rgb(7 21 47 / 42%));
+}
+
 .sendButton:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-flow-active) 90%, #ffffff);
+}
+
+.sendButton.stopButtonActive:hover:not(:disabled) {
+  background: transparent;
 }
 
 .sendButton:disabled {
