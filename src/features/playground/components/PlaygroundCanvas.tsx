@@ -145,6 +145,8 @@ type PlaygroundCanvasProps = {
   initialGraphOverride?: PlaygroundInitialGraph;
   isolated?: boolean;
   reportsOverride?: Report[];
+  nodeSummariesOverride?: Record<string, NodeSummary>;
+  artifactUrlsOverride?: Record<string, string>;
 };
 
 export type PlaygroundInitialGraph = {
@@ -676,6 +678,8 @@ export function PlaygroundCanvas({
   initialGraphOverride,
   isolated = false,
   reportsOverride,
+  nodeSummariesOverride,
+  artifactUrlsOverride,
 }: PlaygroundCanvasProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const reactFlowInstanceRef = useRef<
@@ -732,6 +736,7 @@ export function PlaygroundCanvas({
   });
   const reportRequestSequence = useRef(0);
   const hydratedSummaryNodes = useRef(new Set<string>());
+  const locallyStartedBranchRunIds = useRef(new Set<string>());
   const hasReconciledEventGraph = useRef(false);
   const draggedNodeId = useRef<string | null>(null);
   const dragStartPositions = useRef(new Map<string, { x: number; y: number }>());
@@ -1173,14 +1178,29 @@ export function PlaygroundCanvas({
     if (isRestoringStoredRun) return;
 
     const activeRunOriginalQuery = run?.run_id === activeRunId
-      && typeof run.metadata?.query === 'string'
-      ? run.metadata.query.trim()
+      ? (
+          typeof run.metadata?.user_prompt === 'string'
+            ? run.metadata.user_prompt
+            : typeof run.metadata?.query === 'string'
+              ? run.metadata.query
+              : ''
+        ).trim()
       : '';
+    const activeRunIsBranch = Boolean(
+      activeRunId
+      && (
+        locallyStartedBranchRunIds.current.has(activeRunId)
+        || (
+          run?.run_id === activeRunId
+          && typeof run.metadata?.branched_from_run_id === 'string'
+        )
+      ),
+    );
     const nextGraph = deriveNodeGraphFromEvents(
       visibleEvents,
       playgroundNodes,
       playgroundEdges,
-      isRunActive ? activeRunId : null,
+      isRunActive && !activeRunIsBranch ? activeRunId : null,
     );
     const explicitlyRemovedEventNodeIds = getExplicitlyRemovedEventNodeIds(visibleEvents);
     const terminalRunIds = new Set(
@@ -1273,12 +1293,10 @@ export function PlaygroundCanvas({
           visitedRunIds.add(rootRunId);
           rootRunId = parentRunIdByRunId.get(rootRunId)!;
         }
-        if (!queryByRunId.has(rootRunId)) {
-          queryByRunId.set(rootRunId, {
-            label: '원본 쿼리',
-            text: activeRunOriginalQuery,
-          });
-        }
+        queryByRunId.set(rootRunId, {
+          label: '원본 쿼리',
+          text: activeRunOriginalQuery,
+        });
       }
 
       const eventNodes = nextGraph.nodes.map((node) => {
@@ -1293,8 +1311,8 @@ export function PlaygroundCanvas({
         const data = {
           ...node.data,
           parentNodeId: datasourceIdByRootNodeId.get(node.id) ?? node.data.parentNodeId,
-          queryLabel: node.data.queryLabel ?? inheritedQuery?.label,
-          queryText: node.data.queryText ?? inheritedQuery?.text,
+          queryLabel: inheritedQuery?.label ?? currentNode?.data.queryLabel ?? node.data.queryLabel,
+          queryText: inheritedQuery?.text ?? currentNode?.data.queryText ?? node.data.queryText,
           animateOnCreate: !currentNode && shouldAnimateNewEdges,
           onDeleteRun: handleDeleteRunStable,
         };
@@ -1341,6 +1359,15 @@ export function PlaygroundCanvas({
 
       const eventNodeById = new Map(eventNodes.map((node) => [node.id, node]));
       const latestNodeIdByRunId = new Map<string, string>();
+      const branchRunIds = new Set<string>();
+
+      for (const edge of nextGraph.edges) {
+        const parentRunId = eventNodeById.get(edge.source)?.data.runId;
+        const childRunId = eventNodeById.get(edge.target)?.data.runId;
+        if (parentRunId && childRunId && parentRunId !== childRunId) {
+          branchRunIds.add(childRunId);
+        }
+      }
 
       for (const node of eventNodes) {
         const runId = node.data.runId;
@@ -1454,11 +1481,13 @@ export function PlaygroundCanvas({
         && !node.id.startsWith('manual-')
         && !nextNodeIds.has(node.id)
         && !removedVisualNodeIds.has(node.id)
+        && !(node.data.runId && branchRunIds.has(node.data.runId))
       ));
       const generatedDatasourceIds = new Set(datasourceNodes.map((node) => node.id));
       const retainedDatasourceNodes = currentNodes.filter((node) => (
         node.data.kind === 'datasource'
         && !generatedDatasourceIds.has(node.id)
+        && ![...branchRunIds].some((runId) => node.id === `datasource:${runId}`)
       ));
 
       return [
@@ -1618,6 +1647,11 @@ export function PlaygroundCanvas({
       setNodeSummaryRequest({ data: null, error: null, isLoading: false });
       return () => { cancelled = true; };
     }
+    const summaryOverride = nodeSummariesOverride?.[selectedNodeSummary.id];
+    if (summaryOverride) {
+      setNodeSummaryRequest({ data: summaryOverride, error: null, isLoading: false });
+      return () => { cancelled = true; };
+    }
     if (!selectedNodeSummary.runId || selectedNodeSummary.status !== 'success') {
       setNodeSummaryRequest({ data: null, error: null, isLoading: false });
       return () => { cancelled = true; };
@@ -1644,7 +1678,7 @@ export function PlaygroundCanvas({
       });
 
     return () => { cancelled = true; };
-  }, [selectedNodeSummary]);
+  }, [nodeSummariesOverride, selectedNodeSummary]);
 
   useEffect(() => {
     reportRequestSequence.current += 1;
@@ -1924,7 +1958,15 @@ export function PlaygroundCanvas({
 
     setActiveFlowTarget({ nodeId: node.id, runId: node.data.runId ?? null });
     if (isolated) {
-      setSelectedNodeSummary(null);
+      setNodeReportRequest({ data: null, error: null, isLoading: false });
+      setSelectedNodeSummary(nodeSummariesOverride?.[node.id] ? {
+        id: node.id,
+        runId: node.data.runId ?? null,
+        label: node.data.label,
+        kind: node.data.kind,
+        status: node.data.status,
+        parentNodeId: node.data.parentNodeId ?? null,
+      } : null);
       return;
     }
 
@@ -1985,6 +2027,7 @@ export function PlaygroundCanvas({
         prompt,
         selectedNodeSummary.id,
       );
+      locallyStartedBranchRunIds.current.add(branchRun.run_id);
       setActiveRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
       setActiveFlowTarget({ nodeId: null, runId: branchRun.run_id });
@@ -2111,7 +2154,7 @@ export function PlaygroundCanvas({
           reportRequestSequence.current += 1;
           setNodeReportRequest({ data: null, error: null, isLoading: false });
         }}
-        onBranchPromptSend={handleBranchPromptSend}
+        onBranchPromptSend={isolated ? async () => undefined : handleBranchPromptSend}
         canDeleteAllNodes={hasDeletableNodes && !isGenerating && !isDeletingNodes}
         isDeletingAllNodes={isDeletingNodes}
         deleteAllNodesError={deleteNodesError}
@@ -2122,6 +2165,7 @@ export function PlaygroundCanvas({
         isLeavingForSessions={isLeavingForSessions}
         isEnteringFromSessions={isEnteringFromSessions}
         reportsOverride={reportsOverride}
+        artifactUrlsOverride={artifactUrlsOverride}
       />
     </div>
   );

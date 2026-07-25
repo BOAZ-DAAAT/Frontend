@@ -6,6 +6,7 @@ import { BlobPage } from '@/pages/BlobPage';
 import { ComposerPage } from '@/pages/ComposerPage';
 import { ConnectPage } from '@/pages/ConnectPage';
 import { LoginPage } from '@/pages/LoginPage';
+import { MockupPage } from '@/pages/MockupPage';
 import { NodePage } from '@/pages/NodePage';
 import { PlaygroundPage } from '@/pages/PlaygroundPage';
 import { PlaygroundTestPage } from '@/pages/PlaygroundTestPage';
@@ -21,6 +22,7 @@ export const router = createBrowserRouter([{
     { path: '/sessions', element: <RequireAuth><PlaygroundPage initialView="sessions" /></RequireAuth> },
     { path: '/connect', element: <RequireAuth><ConnectPage /></RequireAuth> },
     { path: '/playground', element: <RequireAuth><PlaygroundPage /></RequireAuth> },
+    { path: '/mockup', element: <MockupPage /> },
     { path: '/playground-test', element: <PlaygroundTestPage /> },
   ],
 },

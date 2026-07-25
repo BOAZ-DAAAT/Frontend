@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { PlaygroundCanvas } from '@/features/playground/components/PlaygroundCanvas';
 import type { PlaygroundInitialGraph } from '@/features/playground/components/PlaygroundCanvas';
+import type { NodeSummary } from '@/features/playground/node-summary/types';
 import { SidebarProvider } from '@/features/playground/sidebar/SidebarContext';
 import type { SidebarNode } from '@/features/playground/sidebar/types';
 import type { Report } from '@/features/playground/report/reportData';
@@ -14,6 +15,8 @@ type PlaygroundPageProps = {
   initialGraph?: PlaygroundInitialGraph;
   isolated?: boolean;
   reportsOverride?: Report[];
+  nodeSummariesOverride?: Record<string, NodeSummary>;
+  artifactUrlsOverride?: Record<string, string>;
 };
 
 export function PlaygroundPage({
@@ -21,6 +24,8 @@ export function PlaygroundPage({
   initialGraph,
   isolated = false,
   reportsOverride,
+  nodeSummariesOverride,
+  artifactUrlsOverride,
 }: PlaygroundPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -117,6 +122,8 @@ export function PlaygroundPage({
           initialGraphOverride={initialGraph}
           isolated={isolated}
           reportsOverride={reportsOverride}
+          nodeSummariesOverride={nodeSummariesOverride}
+          artifactUrlsOverride={artifactUrlsOverride}
         />
       </SidebarProvider>
     </ModeProvider>

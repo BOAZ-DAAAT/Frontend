@@ -42,6 +42,20 @@ function mergeEvents(previous: RunEvent[], next: RunEvent[]): RunEvent[] {
   ));
 }
 
+function mergeRunMetadata(
+  current: Record<string, unknown> | null | undefined,
+  incoming: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const userPrompt = current?.user_prompt;
+  const originalQuery = current?.query;
+  return {
+    ...current,
+    ...incoming,
+    ...(typeof userPrompt === 'string' ? { user_prompt: userPrompt } : {}),
+    ...(typeof originalQuery === 'string' ? { query: originalQuery } : {}),
+  };
+}
+
 function statusFromEvent(event: RunEvent): RunSummary['status'] | null {
   if (event.event_type === 'run.completed') return 'succeeded';
   if (event.event_type === 'run.failed') return 'failed';
@@ -113,10 +127,7 @@ export function useAgentRunStream(
           return {
             ...currentRun,
             status: eventStatus,
-            metadata: {
-              ...currentRun.metadata,
-              ...event.metadata,
-            },
+            metadata: mergeRunMetadata(currentRun.metadata, event.metadata),
           };
         }, run);
         const isTerminal = TERMINAL_RUN_STATUSES.has(hydratedRun.status);
@@ -154,13 +165,10 @@ export function useAgentRunStream(
                   run: current.run
                     && nextStatus
                     && !TERMINAL_RUN_STATUSES.has(current.run.status)
-                    ? {
+                      ? {
                         ...current.run,
                         status: nextStatus,
-                        metadata: {
-                          ...current.run.metadata,
-                          ...message.data.metadata,
-                        },
+                        metadata: mergeRunMetadata(current.run.metadata, message.data.metadata),
                       }
                     : current.run,
                   events: appendEvent(current.events, message.data),

@@ -43,6 +43,7 @@ type NodeSummaryPanelProps = {
   isLoading: boolean;
   onClose: () => void;
   onBranchPromptSend: (prompt: string) => Promise<void>;
+  artifactUrls?: Record<string, string>;
 };
 
 const NODE_ICONS: Record<PlaygroundNodeKind, LucideIcon> = {
@@ -276,7 +277,15 @@ function SqlPreviewTable({ rows }: { rows: Record<string, unknown>[] }) {
   );
 }
 
-function ChartImage({ runId, artifactId }: { runId: string | null; artifactId: string }) {
+function ChartImage({
+  runId,
+  artifactId,
+  artifactUrl,
+}: {
+  runId: string | null;
+  artifactId: string;
+  artifactUrl?: string;
+}) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [hasError, setHasError] = useState(false);
 
@@ -286,6 +295,10 @@ function ChartImage({ runId, artifactId }: { runId: string | null; artifactId: s
 
     setImageUrl(null);
     setHasError(false);
+    if (artifactUrl) {
+      setImageUrl(artifactUrl);
+      return () => undefined;
+    }
     if (!runId) {
       setHasError(true);
       return () => undefined;
@@ -305,7 +318,7 @@ function ChartImage({ runId, artifactId }: { runId: string | null; artifactId: s
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [artifactId, runId]);
+  }, [artifactId, artifactUrl, runId]);
 
   if (hasError) {
     return <div className={styles.chartFallback}>차트 artifact를 불러오지 못했습니다. ({artifactId})</div>;
@@ -316,12 +329,25 @@ function ChartImage({ runId, artifactId }: { runId: string | null; artifactId: s
   return <img className={styles.chartImage} src={imageUrl} alt="EDA chart artifact" />;
 }
 
-function FindingCharts({ runId, chartArtifactIds }: { runId: string | null; chartArtifactIds?: string[] }) {
+function FindingCharts({
+  runId,
+  chartArtifactIds,
+  artifactUrls,
+}: {
+  runId: string | null;
+  chartArtifactIds?: string[];
+  artifactUrls?: Record<string, string>;
+}) {
   if (!chartArtifactIds?.length) return null;
   return (
     <div className={styles.chartGrid}>
       {chartArtifactIds.map((artifactId) => (
-        <ChartImage key={artifactId} runId={runId} artifactId={artifactId} />
+        <ChartImage
+          key={artifactId}
+          runId={runId}
+          artifactId={artifactId}
+          artifactUrl={artifactUrls?.[artifactId]}
+        />
       ))}
     </div>
   );
@@ -904,7 +930,15 @@ function SqlSummaryDocument({ summary }: { summary: NodeSummary }) {
   );
 }
 
-function EdaSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
+function EdaSummaryDocument({
+  summary,
+  runId,
+  artifactUrls,
+}: {
+  summary: NodeSummary;
+  runId: string | null;
+  artifactUrls?: Record<string, string>;
+}) {
   const detail = summary.detail;
   const dataProfile = getString(detail.data_profile);
   const qualityIssues = getStringArray(detail.quality_issues);
@@ -957,7 +991,11 @@ function EdaSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: s
             {statisticalFindings.map((item, index) => (
               <article key={`${item.heading}-${index}`} className={styles.edaFinding}>
                 <h4>{index + 1}. {item.heading}</h4>
-                <FindingCharts runId={runId} chartArtifactIds={item.chart_artifact_ids} />
+                <FindingCharts
+                  runId={runId}
+                  chartArtifactIds={item.chart_artifact_ids}
+                  artifactUrls={artifactUrls}
+                />
                 {item.rationale ? (
                   <p className={styles.findingRationale}>
                     <RichText text={item.rationale} codeTerms={codeTerms} />
@@ -1040,7 +1078,15 @@ function InsightStageCard({
   );
 }
 
-function InsightSummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
+function InsightSummaryDocument({
+  summary,
+  runId,
+  artifactUrls,
+}: {
+  summary: NodeSummary;
+  runId: string | null;
+  artifactUrls?: Record<string, string>;
+}) {
   const detail = summary.detail;
   const codeTerms = collectCodeTerms(summary);
   const answer = getString(detail.answer) || summary.key_finding || summary.conclusion;
@@ -1069,7 +1115,11 @@ function InsightSummaryDocument({ summary, runId }: { summary: NodeSummary; runI
         {supportingCharts.map((item, index) => (
           <article key={`${item.heading}-${index}`} className={styles.insightChartCard}>
             <h4>{item.heading}</h4>
-            <FindingCharts runId={runId} chartArtifactIds={item.chart_artifact_ids} />
+            <FindingCharts
+              runId={runId}
+              chartArtifactIds={item.chart_artifact_ids}
+              artifactUrls={artifactUrls}
+            />
           </article>
         ))}
       </InsightStageCard>
@@ -1120,18 +1170,26 @@ function InsightSummaryDocument({ summary, runId }: { summary: NodeSummary; runI
   );
 }
 
-function SummaryDocument({ summary, runId }: { summary: NodeSummary; runId: string | null }) {
+function SummaryDocument({
+  summary,
+  runId,
+  artifactUrls,
+}: {
+  summary: NodeSummary;
+  runId: string | null;
+  artifactUrls?: Record<string, string>;
+}) {
   if (summary.detail.kind === 'sql') {
     return <SqlSummaryDocument summary={summary} />;
   }
   if (summary.detail.kind === 'eda') {
-    return <EdaSummaryDocument summary={summary} runId={runId} />;
+    return <EdaSummaryDocument summary={summary} runId={runId} artifactUrls={artifactUrls} />;
   }
   if (summary.detail.kind === 'analysis') {
     return <AnalysisSummaryDocument summary={summary} />;
   }
   if (summary.detail.kind === 'insight') {
-    return <InsightSummaryDocument summary={summary} runId={runId} />;
+    return <InsightSummaryDocument summary={summary} runId={runId} artifactUrls={artifactUrls} />;
   }
   const codeTerms = collectCodeTerms(summary);
   const hiddenKeys = new Set<string>(['handoff']);
@@ -1209,6 +1267,7 @@ export function NodeSummaryPanel({
   isLoading,
   onClose,
   onBranchPromptSend,
+  artifactUrls,
 }: NodeSummaryPanelProps) {
   const panelRef = useRef<HTMLElement>(null);
   const resizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
@@ -1305,7 +1364,7 @@ export function NodeSummaryPanel({
           <div className={styles.documentLayout}>
             <div className={styles.documentScroll}>
               {summary
-                ? <SummaryDocument summary={summary} runId={runId} />
+                ? <SummaryDocument summary={summary} runId={runId} artifactUrls={artifactUrls} />
                 : <SummaryState node={node} error={error} isLoading={isLoading} />}
             </div>
             <div className={styles.composerDock}>

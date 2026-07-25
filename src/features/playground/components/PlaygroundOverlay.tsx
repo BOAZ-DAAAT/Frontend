@@ -91,6 +91,7 @@ interface PlaygroundOverlayProps {
   isLeavingForSessions: boolean;
   isEnteringFromSessions: boolean;
   reportsOverride?: Report[];
+  artifactUrlsOverride?: Record<string, string>;
 }
 
 export function PlaygroundOverlay({
@@ -133,6 +134,7 @@ export function PlaygroundOverlay({
   isLeavingForSessions,
   isEnteringFromSessions,
   reportsOverride,
+  artifactUrlsOverride,
 }: PlaygroundOverlayProps) {
   const { activeSection, closeSessionCreate, selectSession, sessionPane, view } = useSidebar();
   const isReportWorkspaceOpen = activeSection === 'report' && view === 'navigation';
@@ -189,6 +191,7 @@ export function PlaygroundOverlay({
           isLoading={isNodeSummaryLoading}
           onClose={onCloseNodeSummary}
           onBranchPromptSend={onBranchPromptSend}
+          artifactUrls={artifactUrlsOverride}
         />
       ) : null}
 
