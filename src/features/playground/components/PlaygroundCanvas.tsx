@@ -1983,10 +1983,9 @@ export function PlaygroundCanvas({
         branchSourceRunId,
         startStage,
         prompt,
-        selectedNodeSummary.parentNodeId,
+        selectedNodeSummary.id,
       );
       setActiveRunId(branchRun.run_id);
-      setLocallyStartedRunId(branchRun.run_id);
       setStoredActiveRunId(branchRun.run_id);
       setActiveFlowTarget({ nodeId: null, runId: branchRun.run_id });
       setSelectedNodeSummary(null);
