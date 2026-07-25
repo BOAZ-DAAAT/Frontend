@@ -2,6 +2,7 @@ import { Check, MessageCircleQuestion, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
+import { BlobOrb } from '@/pages/BlobPage';
 
 import styles from './PromptComposer.module.css';
 
@@ -307,7 +308,9 @@ export function PromptComposer({
             type="button"
             aria-label={showStopButton ? '실행 정지' : clarification ? '답변 전송' : '전송'}
             title={showStopButton ? '실행 정지' : undefined}
-            className={`${styles.iconButton} ${styles.sendButton}`}
+            className={`${styles.iconButton} ${styles.sendButton} ${
+              showStopButton ? styles.stopButtonActive : ''
+            }`}
             onClick={handlePrimaryAction}
             disabled={
               showStopButton
@@ -320,9 +323,21 @@ export function PromptComposer({
             }
             aria-busy={isSubmittingClarification || isSubmittingAnalysisReview || isStopping}
           >
-            {showStopButton
-              ? <Square size={10} fill="currentColor" strokeWidth={0} aria-hidden />
-              : <SendIcon />}
+            {showStopButton ? (
+              <span className={styles.stopButtonVisual} aria-hidden="true">
+                <span className={styles.stopButtonBlob}>
+                  <BlobOrb active motion={1} speed={0.46} />
+                </span>
+                <Square
+                  className={styles.stopButtonIcon}
+                  size={10}
+                  fill="currentColor"
+                  strokeWidth={0}
+                />
+              </span>
+            ) : (
+              <SendIcon />
+            )}
           </button>
         </div>
         </div>

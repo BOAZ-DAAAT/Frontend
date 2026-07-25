@@ -21,7 +21,10 @@ import {
 } from 'lucide-react';
 import { ReportCard } from '@/features/playground/report/ReportCard';
 import type { Report } from '@/features/playground/report/reportData';
-import type { PlaygroundNodeKind } from '@/features/playground/types';
+import type {
+  PlaygroundNodeKind,
+  PlaygroundNodeStatus,
+} from '@/features/playground/types';
 
 import { getAgentRunArtifactContent } from './api';
 import type { NodeSummary, NodeSummaryAnalysisItem, NodeSummaryFinding } from './types';
@@ -32,7 +35,7 @@ type NodeSummaryPanelProps = {
     id: string;
     label: string;
     kind: PlaygroundNodeKind;
-    status: 'selecting' | 'idle' | 'running' | 'waiting' | 'success' | 'error';
+    status: PlaygroundNodeStatus;
   };
   summary: NodeSummary | null;
   runId: string | null;
@@ -1190,6 +1193,8 @@ function SummaryState({ node, error, isLoading }: Pick<NodeSummaryPanelProps, 'n
   }
   const message = node.status === 'running' || node.status === 'waiting'
     ? '작업이 완료되면 상세 서머리를 확인할 수 있습니다.'
+    : node.status === 'cancelled'
+      ? '사용자가 중단한 노드에는 완료 서머리가 없습니다.'
     : node.status === 'error'
       ? '실패한 노드에는 완료 서머리가 없습니다.'
       : '상세 서머리가 없는 노드입니다.';

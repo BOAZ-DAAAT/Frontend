@@ -19,6 +19,7 @@ function sanitizeNodes(nodes: Node<PlaygroundNodeData>[]): Node<PlaygroundNodeDa
       description: node.data.status === 'error'
         ? ERROR_NODE_DESCRIPTION
         : node.data.description,
+      animateOnCreate: undefined,
       onDeleteRun: undefined,
     },
   }));
@@ -47,6 +48,7 @@ export function getStoredPlaygroundGraph(
             description: node.data.status === 'error'
               ? ERROR_NODE_DESCRIPTION
               : node.data.description,
+            animateOnCreate: false,
           },
         })),
       edges: (parsed.edges as Edge[]).filter(

@@ -8,6 +8,7 @@ import { ConnectPage } from '@/pages/ConnectPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { NodePage } from '@/pages/NodePage';
 import { PlaygroundPage } from '@/pages/PlaygroundPage';
+import { PlaygroundTestPage } from '@/pages/PlaygroundTestPage';
 
 export const router = createBrowserRouter([{
   element: <AppShell />,
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([{
     { path: '/sessions', element: <RequireAuth><PlaygroundPage initialView="sessions" /></RequireAuth> },
     { path: '/connect', element: <RequireAuth><ConnectPage /></RequireAuth> },
     { path: '/playground', element: <RequireAuth><PlaygroundPage /></RequireAuth> },
+    { path: '/playground-test', element: <PlaygroundTestPage /> },
   ],
 },
 ]);

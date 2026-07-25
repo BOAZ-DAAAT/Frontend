@@ -56,10 +56,19 @@
   font-size: var(--text-sm);
 }
 
-.spinner {
-  width: 1.5rem;
-  height: 1.5rem;
-  animation: spin 800ms linear infinite;
+.reportBlob {
+  display: grid;
+  width: 6rem;
+  height: 4.5rem;
+  place-items: center;
+  overflow: hidden;
+}
+
+.reportBlob > canvas {
+  width: 8rem;
+  max-width: none;
+  height: auto;
+  filter: blur(2.8px) saturate(1.04);
 }
 
 .closeButton {
@@ -81,12 +90,6 @@
 .closeButton svg {
   width: 1.25rem;
   height: 1.25rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @media (max-width: 45rem) {

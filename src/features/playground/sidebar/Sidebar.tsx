@@ -2,6 +2,7 @@ import { useEffect, useState, type TransitionEvent } from 'react';
 
 import { AccountAvatar } from '@/features/playground/account/AccountAvatar';
 import sidebarProfileImage from '@/features/playground/account/assets/sidebar-profile.png';
+import type { Report } from '@/features/playground/report/reportData';
 
 import { useSidebar } from './SidebarContext';
 import { SidebarTree } from './SidebarTree';
@@ -10,7 +11,7 @@ import { useSidebarData } from './useSidebarData';
 import { sectionIconMap } from './iconMap';
 import styles from './Sidebar.module.css';
 
-export function Sidebar() {
+export function Sidebar({ reportsOverride }: { reportsOverride?: Report[] }) {
   const {
     activeSection,
     isExpanded,
@@ -20,7 +21,7 @@ export function Sidebar() {
     selectSession,
     view,
   } = useSidebar();
-  const sidebarSections = useSidebarData();
+  const sidebarSections = useSidebarData(reportsOverride);
   const isSessionView = view === 'sessions';
   const [isSessionContentReady, setIsSessionContentReady] = useState(false);
 

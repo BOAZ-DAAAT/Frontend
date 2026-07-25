@@ -155,9 +155,10 @@ ${transitionRules}
 `;
 }
 
-export function ReportWorkspace() {
+export function ReportWorkspace({ reportsOverride }: { reportsOverride?: Report[] }) {
   const { selectedItemId, beginCollapse, collapse } = useSidebar();
   const [availableReports, setAvailableReports] = useState<Report[]>(() => {
+    if (reportsOverride) return reportsOverride;
     const sessionId = getCurrentSessionId();
     return sessionId ? getCachedReports(sessionId) : [];
   });
@@ -176,6 +177,11 @@ export function ReportWorkspace() {
   }, [availableReports]);
 
   useEffect(() => {
+    if (reportsOverride) {
+      setAvailableReports(reportsOverride);
+      return;
+    }
+
     let cancelled = false;
     const sessionId = getCurrentSessionId();
     if (!sessionId) return () => { cancelled = true; };
@@ -198,7 +204,7 @@ export function ReportWorkspace() {
       cancelled = true;
       window.removeEventListener(REPORTS_UPDATED_EVENT, loadReports);
     };
-  }, []);
+  }, [reportsOverride]);
 
   const reportTransitionStyles = useMemo(() => {
     return createReportTransitionStyles(reportItems);

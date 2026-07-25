@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { FileText, X, type LucideIcon } from 'lucide-react';
 
+import { ReportDocument } from './ReportDocument';
 import type { Report } from './reportData';
 import styles from './ReportCard.module.css';
 
@@ -169,6 +170,10 @@ function MarkdownContent({ markdown }: { markdown: string }) {
 }
 
 function ReportContent({ report }: { report: Report }) {
+  if (report.document) {
+    return <ReportDocument report={report} />;
+  }
+
   return (
     <div className={styles.content}>
       <div className={styles.metaRow}>
@@ -214,7 +219,7 @@ export function ReportCard({
       window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         const scale = thumbnail.clientWidth / REPORT_WIDTH;
-        const height = Math.ceil(document.offsetHeight * scale);
+        const height = Math.min(320, Math.ceil(document.offsetHeight * scale));
 
         setThumbnailMetrics((current) => {
           if (current.height === height && current.scale === scale) return current;

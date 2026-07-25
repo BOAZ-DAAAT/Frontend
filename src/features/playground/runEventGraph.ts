@@ -68,6 +68,10 @@ function metadataNumber(event: RunEvent, key: string): number | null {
 function statusFromEvent(event: RunEvent): PlaygroundNodeStatus {
   if (event.event_type === 'supervisor.selection.started') return 'selecting';
   if (event.event_type === 'agent.completed') return 'success';
+  if (
+    event.event_type === 'agent.discarded'
+    && metadataString(event, 'reason_code') === 'run_cancelled'
+  ) return 'cancelled';
   if (event.event_type === 'agent.failed') return 'error';
   if (event.event_type === 'agent.waiting') return 'waiting';
   return 'running';
@@ -121,6 +125,7 @@ export function deriveNodeGraphFromEvents(
   const runtimeNodes = new Map<string, RuntimeNode>();
   const queryByRunId = new Map<string, { label: string; text: string }>();
   const runVisualState = new Map<string, RunVisualState>();
+  const latestAttemptByNodeId = new Map<string, number>();
   const runOrder: string[] = [];
   let nextNodeOrder = 0;
 
@@ -182,7 +187,14 @@ export function deriveNodeGraphFromEvents(
 
     const nodeId = metadataString(event, 'node_id');
     if (!nodeId) continue;
-    if (event.event_type === 'agent.discarded') {
+    const eventAttempt = metadataNumber(event, 'attempt') ?? 0;
+    const latestAttempt = latestAttemptByNodeId.get(nodeId) ?? -1;
+    if (eventAttempt < latestAttempt) continue;
+    latestAttemptByNodeId.set(nodeId, eventAttempt);
+    if (
+      event.event_type === 'agent.discarded'
+      && metadataString(event, 'reason_code') !== 'run_cancelled'
+    ) {
       runtimeNodes.delete(nodeId);
       continue;
     }

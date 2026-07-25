@@ -12,6 +12,7 @@ export type PlaygroundNodeStatus =
     | 'running'
     | 'waiting'
     | 'success'
+    | 'cancelled'
     | 'error';
 
 export const ERROR_NODE_DESCRIPTION =
@@ -42,6 +43,7 @@ export type PlaygroundNodeData = {
     queryLabel?: string;
     queryText?: string;
     queryBadges?: PlaygroundNodeQuery[];
+    animateOnCreate?: boolean;
     onFlowHover?: (nodeId: string | null) => void;
     onDeleteRun?: (runId: string, label: string) => void;
 };

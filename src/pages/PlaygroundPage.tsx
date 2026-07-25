@@ -2,16 +2,26 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { PlaygroundCanvas } from '@/features/playground/components/PlaygroundCanvas';
+import type { PlaygroundInitialGraph } from '@/features/playground/components/PlaygroundCanvas';
 import { SidebarProvider } from '@/features/playground/sidebar/SidebarContext';
 import type { SidebarNode } from '@/features/playground/sidebar/types';
+import type { Report } from '@/features/playground/report/reportData';
 import { ModeProvider } from '@/features/playground/toolbar/ModeContext';
 import type { Session } from '@/features/session/types';
 
 type PlaygroundPageProps = {
   initialView?: 'navigation' | 'sessions';
+  initialGraph?: PlaygroundInitialGraph;
+  isolated?: boolean;
+  reportsOverride?: Report[];
 };
 
-export function PlaygroundPage({ initialView = 'navigation' }: PlaygroundPageProps) {
+export function PlaygroundPage({
+  initialView = 'navigation',
+  initialGraph,
+  isolated = false,
+  reportsOverride,
+}: PlaygroundPageProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const leaveTimerRef = useRef<number | null>(null);
@@ -104,6 +114,9 @@ export function PlaygroundPage({ initialView = 'navigation' }: PlaygroundPagePro
           onClosePreview={() => setPreview(null)}
           isLeavingForSessions={isLeavingForSessions}
           isEnteringFromSessions={isEnteringFromSessions}
+          initialGraphOverride={initialGraph}
+          isolated={isolated}
+          reportsOverride={reportsOverride}
         />
       </SidebarProvider>
     </ModeProvider>
